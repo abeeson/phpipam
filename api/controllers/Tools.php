@@ -8,17 +8,78 @@
 
 class Tools_controller extends Common_api_functions {
 
-	/* public variables */
-	public $_params;					// parameters
 
-	/* protected variables */
+	/**
+	 * _params provided
+	 *
+	 * @var mixed
+	 * @access public
+	 */
+	public $_params;
+
+	/**
+	 * subcontrollers
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
 	protected $subcontrollers;
+
+	/**
+	 * sort_key for database sorting
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
+	protected $sort_key;
+
+	/**
+	 * identifiers
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
 	protected $identifiers;
 
-	/* object holders */
+	/**
+	 * Database object
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
 	protected $Database;
+
+	/**
+	 * Response
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
 	protected $Response;
+
+	/**
+	 * Master Tools object
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
 	protected $Tools;
+
+	/**
+	 * Main Admin class
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
+	protected $Admin;
+
+	/**
+	 * Main Subnets class
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
+	protected $Subnets;
 
 	/**
 	 * __construct function
@@ -27,6 +88,7 @@ class Tools_controller extends Common_api_functions {
 	 * @param class $Database
 	 * @param class $Tools
 	 * @param mixed $params		// post/get values
+	 * @param class $Response
 	 */
 	public function __construct($Database, $Tools, $params, $Response) {
 		$this->Database = $Database;
@@ -45,11 +107,13 @@ class Tools_controller extends Common_api_functions {
 		// rewrite subcontroller
 		$this->rewrite_subcontroller ();
 
-		// set valid keys
-		$this->set_valid_keys ($this->_params->id);
-
-		// set sort key
-		$this->define_sort_key ();
+        // set keys if options are not provided
+		if($_SERVER['REQUEST_METHOD']!="OPTIONS" && isset($this->_params->controller)) {
+            // set valid keys
+    		$this->set_valid_keys ($this->_params->id);
+            // set sort key
+            $this->define_sort_key ();
+        }
 	}
 
 	/**
@@ -61,13 +125,17 @@ class Tools_controller extends Common_api_functions {
 	 * @return void
 	 */
 	private function define_tools_controllers () {
-		$this->subcontrollers = array("ipTags"=>"tags",
-									  "devices"=>"devices",
-									  "deviceTypes"=>"devicetypes",
-									  "vlans"=>"vlans",
-									  "vrf"=>"vrfs",
-									  "nameservers"=>"nameservers",
-									  "scanAgents"=>"scanagents"
+		$this->subcontrollers = array(
+		                              	"ipTags"	  => "tags",
+										"devices"     => "devices",
+										"deviceTypes" => "device_types",
+										"vlans"       => "vlans",
+										"vrf"         => "vrfs",
+										"nameservers" => "nameservers",
+										"scanAgents"  => "scanagents",
+										"locations"   => "locations",
+										"racks"       => "racks",
+										"nat"         => "nat"
 									  );
 	}
 
@@ -79,13 +147,16 @@ class Tools_controller extends Common_api_functions {
 	 */
 	private function define_available_identifiers () {
 		$this->identifiers = array(
-								"ipTags"=>array("id2", "id3"),
-								"devices"=>array("id2", "id3"),
-								"deviceTypes"=>array("id2", "id3"),
-								"vlans"=>array("id2", "id3"),
-								"vrf"=>array("id2", "id3"),
-								"nameservers"=>array("id2"),
-								"scanAgents"=>array("id2")
+								"ipTags"      => array("id2", "id3"),
+								"devices"     => array("id2", "id3"),
+								"deviceTypes" => array("id2", "id3"),
+								"vlans"       => array("id2", "id3"),
+								"vrf"         => array("id2", "id3"),
+								"nameservers" => array("id2"),
+								"scanAgents"  => array("id2"),
+								"locations"   => array("id2", "id3"),
+								"racks"       => array("id2", "id3"),
+								"nat"         => array("id2", "id3")
 								);
 	}
 
@@ -128,10 +199,13 @@ class Tools_controller extends Common_api_functions {
 						array("rel"=>"subnets",		"href"=>"/api/".$_GET['app_id']."/subnets/"),
 						array("rel"=>"folders",		"href"=>"/api/".$_GET['app_id']."/folders/"),
 						array("rel"=>"addresses",	"href"=>"/api/".$_GET['app_id']."/addresses/"),
-						array("rel"=>"vlans",		"href"=>"/api/".$_GET['app_id']."/vlans/"),
-						array("rel"=>"vrfs",		"href"=>"/api/".$_GET['app_id']."/vrfs/"),
-						array("rel"=>"nameservers",	"href"=>"/api/".$_GET['app_id']."/nameservers/"),
-						array("rel"=>"scanAgents",	"href"=>"/api/".$_GET['app_id']."/scanagents/"),
+						array("rel"=>"vlans",		"href"=>"/api/".$_GET['app_id']."/vlan/"),
+						array("rel"=>"vrfs",		"href"=>"/api/".$_GET['app_id']."/vrf/"),
+						array("rel"=>"nameservers",	"href"=>"/api/".$_GET['app_id']."/tools/nameservers/"),
+						array("rel"=>"scanAgents",	"href"=>"/api/".$_GET['app_id']."/tools/scanagents/"),
+						array("rel"=>"locations",	"href"=>"/api/".$_GET['app_id']."/tools/locations/"),
+						array("rel"=>"racks",	    "href"=>"/api/".$_GET['app_id']."/tools/racks/"),
+						array("rel"=>"nat",	        "href"=>"/api/".$_GET['app_id']."/tools/nat/"),
 						array("rel"=>"tools",		"href"=>"/api/".$_GET['app_id']."/tools/")
 					);
 		# Response
@@ -148,11 +222,28 @@ class Tools_controller extends Common_api_functions {
 	 *	structure:
 	 *		/tools/{subcontroller}/{identifier}/{parameter}/
 	 *
-	 *		/{tools}/id/id2/id3/
+	 *		/tools/id/id2/id3/
 	 *
 	 *		- {subcontroller}	- defines which tools object to work on
 	 *		- {identifier}		- defines id for that object (optional)
 	 *		- {parameter}		- additional parameter (optional)
+	 *
+	 *  Special options:
+	 *      - /tools/device_types/{id}/
+	 *      - /tools/device_types/{id}/devices/
+	 *
+	 *      - /tools/vlans/{id}/subnets/
+	 *
+	 *      - /tools/vrf/{id}/subnets/
+	 *
+	 *      - /tools/locations/{id}/subnets/
+	 *      - /tools/locations/{id}/devices/
+	 *      - /tools/locations/{id}/racks/
+	 *
+	 *      - /tools/racks/{id}/devices/
+	 *
+	 *      - /tools/nat/{id}/objects/
+	 *      - /tools/nat/{id}/objects_full/
 	 *
 	 * @access public
 	 * @return void
@@ -182,10 +273,16 @@ class Tools_controller extends Common_api_functions {
                 // add gateway
     			if($result!=false) {
     				foreach ($result as $k=>$r) {
+        				//gateway
                 		$gateway = $this->read_subnet_gateway ($r->id);
                 		if ( $gateway!== false) {
                     		$result[$k]->gatewayId = $gateway->id;
                 		}
+                    	//nameservers
+                		$ns = $this->read_subnet_nameserver ();
+                        if ($ns!==false) {
+                            $result[$k]->nameservers = $ns;
+                        }
     				}
     			}
 			}
@@ -203,7 +300,48 @@ class Tools_controller extends Common_api_functions {
     				}
     			}
 			}
+			// locations
+			elseif ($this->_params->id == "locations" && ($this->_params->id3=="subnets" || $this->_params->id3=="racks" || $this->_params->id3=="devices")) {
+				// fetch
+				$result = $this->Tools->fetch_multiple_objects ($this->_params->id3, "location", $this->_params->id2, "id", true);
+			}
+			// racks
+			elseif ($this->_params->id == "racks" && $this->_params->id3=="devices") {
+				// fetch
+				$result = $this->Tools->fetch_multiple_objects ($this->_params->id3, "rack", $this->_params->id2, "id", true);
+			}
+			// nat
+			elseif ($this->_params->id == "nat" && ($this->_params->id3=="objects" || $this->_params->id3=="objects_full")) {
+    			// fetch nat first
+    			$result = $this->Tools->fetch_object ($this->_params->id, $this->sort_key, $this->_params->id2);
+                // add objects
+    			if($result!=false) {
+    				// parse result
+    				$result->src = $this->parse_nat_objects ($result->src);
+    				$result->dst = $this->parse_nat_objects ($result->dst);
+    				// full ?
+    				if ($this->_params->id3=="objects_full") {
+        				if(sizeof($result->src)>0) {
+            				foreach ($result->src as $type=>$arr) {
+                				foreach ($arr as $k=>$id) {
+                    				unset($result->src[$type][$k]);
+                    				$result->src[$type][] = $this->Tools->fetch_object ($type, "id", $id);
+                                }
+            				}
+        				}
+        				if(sizeof($result->dst)>0) {
+            				foreach ($result->dst as $type=>$arr) {
+                				foreach ($arr as $k=>$id) {
+                    				unset($result->dst[$type][$k]);
+                    				$result->dst[$type][] = $this->Tools->fetch_object ($type, "id", $id);
+                                }
+            				}
+        				}
+    				}
+    			}
+			}
 			else {
+    			$field = string;
 				// id3 can only be addresses
 				if ($this->_params->id3 != "addresses")	{ $this->Response->throw_exception(400, 'Invalid parameter'); }
 				// define identifier
@@ -250,6 +388,14 @@ class Tools_controller extends Common_api_functions {
 		if ($this->_params->id=="vlans" || $this->_params->id=="vrf")
 													{ $this->Response->throw_exception(400, 'Please use '.$this->_params->id.' controller'); }
 
+		# remap keys
+		$this->remap_keys ();
+
+		# Get coordinates if locations
+		if($this->_params->id=="locations") {
+			$values = $this->format_location ();
+		}
+
 		# check for valid keys
 		$values = $this->validate_keys ();
 
@@ -264,7 +410,7 @@ class Tools_controller extends Common_api_functions {
 													{ $this->Response->throw_exception(500, $this->_params->id." object creation failed"); }
 		else {
 			//set result
-			return array("code"=>201, "data"=>$this->_params->id." object created", "location"=>"/api/".$this->_params->app_id."/tools/".$this->_params->id."/".$this->Admin->lastId."/");
+			return array("code"=>201, "data"=>$this->_params->id." object created", "id"=>$this->Admin->lastId, "location"=>"/api/".$this->_params->app_id."/tools/".$this->_params->id."/".$this->Admin->lastId."/");
 		}
 
 	}
@@ -298,6 +444,8 @@ class Tools_controller extends Common_api_functions {
 		# vlans, vrfs
 		if ($this->_params->id=="vlans" || $this->_params->id=="vrf")
 													{ $this->Response->throw_exception(400, 'Please use '.$this->_params->id.' controller'); }
+		# remap keys
+		$this->remap_keys ();
 
 		# verify object
 		$this->validate_tools_object ();
@@ -321,7 +469,7 @@ class Tools_controller extends Common_api_functions {
 													{ $this->Response->throw_exception(500, $table_name." object edit failed"); }
 		else {
 			//set result
-			return array("code"=>200, "data"=>$table_name." object updated");
+			return array("code"=>200, "message"=>$table_name." object updated");
 		}
 	}
 
@@ -344,6 +492,7 @@ class Tools_controller extends Common_api_functions {
 		$this->validate_tools_object ();
 
 		# set variables for delete
+		$values = array();
 		$values[$this->sort_key] = $this->_params->id2;
 
 		# execute delete
@@ -359,7 +508,7 @@ class Tools_controller extends Common_api_functions {
 			$this->Admin->remove_object_references ("ipaddresses", $update_field, $this->_params->id2);
 
 			// set result
-			return array("code"=>200, "data"=>$this->_params->id." object deleted");
+			return array("code"=>200, "message"=>$this->_params->id." object deleted");
 		}
 	}
 
@@ -382,8 +531,9 @@ class Tools_controller extends Common_api_functions {
 	 */
 	private function validate_subcontroller () {
 		// not options
-		if($this->_params->controller !== "options")
-		if (!in_array($this->_params->id, @$this->subcontrollers))			{ $this->Response->throw_exception(400, "Invalid subcontroller"); }
+		if($_SERVER['REQUEST_METHOD']!=="OPTIONS") {
+    		if (!in_array($this->_params->id, @$this->subcontrollers))			{ $this->Response->throw_exception(400, "Invalid subcontroller"); }
+		}
 	}
 
 	/**
@@ -421,7 +571,7 @@ class Tools_controller extends Common_api_functions {
 	 */
 	private function validate_tools_object () {
 		if ($this->Tools->fetch_object ($this->_params->id, $this->sort_key, $this->_params->id2)===false)
-																			{ $this->Response->throw_exception(400, "Invalid identifier"); }
+																			{ $this->Response->throw_exception(404, "Invalid identifier"); }
 	}
 
 	/**
@@ -444,10 +594,10 @@ class Tools_controller extends Common_api_functions {
 	private function validate_device_type () {
 		if ($this->_params->id == "devices" && isset($this->_params->type)) {
 			// numeric
-			if (!is_numeric($this->_params->type))							{ $this->Response->throw_exception(400, "Invalid devicetype identifier"); }
+			if (!is_numeric($this->_params->type))							{ $this->Response->throw_exception(409, "Invalid devicetype identifier"); }
 			// check
 			if ($this->Tools->fetch_object ("deviceTypes", "tid", $this->_params->type)===false)
-																			{ $this->Response->throw_exception(400, "Device type does not exist"); }
+																			{ $this->Response->throw_exception(404, "Device type does not exist"); }
 		}
 	}
 
@@ -476,6 +626,46 @@ class Tools_controller extends Common_api_functions {
 	private function read_subnet_gateway ($subnetId) {
     	return $this->Subnets->find_gateway ($subnetId);
 	}
-}
 
-?>
+	/**
+	 * Returns nameserver details
+	 *
+	 * @access private
+	 * @return void
+	 */
+	private function read_subnet_nameserver () {
+    	return $this->Tools->fetch_object ("nameservers", "id", $result->nameserverId);
+	}
+
+	/**
+	 * Parses NAT objects into array.
+	 *
+	 * @access private
+	 * @param json $obj
+	 * @return void
+	 */
+	private function parse_nat_objects ($obj) {
+    	if($this->Tools->validate_json_string($obj)!==false) {
+        	return(json_decode($obj, true));
+    	}
+    	else {
+        	return false;
+    	}
+	}
+
+	/**
+	 * Get latlng from Google
+	 *
+	 * @method format_location
+	 * @return [type]          [description]
+	 */
+	private function format_location () {
+		if((strlen(@$this->_params->lat)==0 || strlen(@$this->_params->long)==0) && strlen(@$this->_params->address)>0) {
+            $latlng = $this->Tools->get_latlng_from_address ($this->_params->address);
+            if($latlng['lat']!=NULL && $latlng['lng']!=NULL) {
+                $this->_params->lat  = $latlng['lat'];
+                $this->_params->long = $latlng['lng'];
+            }
+		}
+	}
+}

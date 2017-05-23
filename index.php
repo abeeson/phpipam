@@ -29,7 +29,7 @@ if($_GET['page']!="install" ) {
 	$Log 		= new Logging ($Database);
 
 	# reset url for base
-	$url = $Result->createURL ();
+	$url = $User->createURL ();
 }
 
 /** include proper subpage **/
@@ -38,6 +38,9 @@ elseif($_GET['page']=="upgrade")	{ require("app/upgrade/index.php"); }
 elseif($_GET['page']=="login")		{ require("app/login/index.php"); }
 elseif($_GET['page']=="temp_share")	{ require("app/temp_share/index.php"); }
 elseif($_GET['page']=="request_ip")	{ require("app/login/index.php"); }
+elseif($_GET['page']=="opensearch")	{ require("app/tools/search/opensearch.php"); }
+elseif($_GET['page']=="saml2")      { require("app/saml2/index.php"); }
+elseif($_GET['page']=="saml2-idp")  { require("app/saml2/idp.php"); }
 else {
 	# verify that user is logged in
 	$User->check_user_session();
@@ -50,6 +53,11 @@ else {
 		unset($_SESSION['realipamusername']);
 		print	'<script>window.location.href = "'.create_link(null).'";</script>';
 	}
+
+	# set default pagesize
+	if(!isset($_COOKIE['table-page-size'])) {
+        setcookie("table-page-size", 50, time()+2592000, "/", false, false, false);
+	}
 ?>
 <!DOCTYPE HTML>
 <html lang="en">
@@ -61,7 +69,7 @@ else {
 	<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 
 	<meta name="Description" content="">
-	<meta name="title" content="<?php print $User->settings->siteTitle; ?>">
+	<meta name="title" content="<?php print $title = $User->get_site_title ($_GET); ?>">
 	<meta name="robots" content="noindex, nofollow">
 	<meta http-equiv="X-UA-Compatible" content="IE=9" >
 
@@ -71,32 +79,50 @@ else {
 	<meta http-equiv="X-UA-Compatible" content="chrome=1">
 
 	<!-- title -->
-	<title><?php print $User->settings->siteTitle; ?></title>
+	<title><?php print $title; ?></title>
+
+	<!-- OpenSearch -->
+	<link rel="search" type="application/opensearchdescription+xml" href="/?page=opensearch" title="Search <?php print $User->settings->siteTitle; ?>">
 
 	<!-- css -->
-	<link rel="stylesheet" type="text/css" href="css/1.2/bootstrap/bootstrap.min.css">
-	<link rel="stylesheet" type="text/css" href="css/1.2/bootstrap/bootstrap-custom.css">
-	<link rel="stylesheet" type="text/css" href="css/1.2/font-awesome/font-awesome.min.css">
-	<link rel="shortcut icon" type="image/png" href="css/1.2/images/favicon.png">
-	<link rel="stylesheet" type="text/css" href="css/1.2/bootstrap/bootstrap-switch.min.css">
-	<!-- js -->
-	<script type="text/javascript" src="js/1.2/jquery-2.1.3.min.js"></script>
-	<script type="text/javascript" src="js/1.2/jclock.jquery.js"></script>
-	<?php if($_GET['page']=="login" || $_GET['page']=="request_ip") { ?>
-	<script type="text/javascript" src="js/1.2/login.js"></script>
+	<link rel="shortcut icon" type="image/png" href="css/<?php print SCRIPT_PREFIX; ?>/images/favicon.png">
+	<link rel="stylesheet" type="text/css" href="css/<?php print SCRIPT_PREFIX; ?>/bootstrap/bootstrap.min.css">
+	<link rel="stylesheet" type="text/css" href="css/<?php print SCRIPT_PREFIX; ?>/bootstrap/bootstrap-custom.css">
+	<link rel="stylesheet" type="text/css" href="css/<?php print SCRIPT_PREFIX; ?>/font-awesome/font-awesome.min.css">
+	<link rel="stylesheet" type="text/css" href="css/<?php print SCRIPT_PREFIX; ?>/bootstrap/bootstrap-switch.min.css">
+	<?php if ($User->settings->enableThreshold=="1") { ?>
+	<link rel="stylesheet" type="text/css" href="css/<?php print SCRIPT_PREFIX; ?>/slider.css">
 	<?php } ?>
-	<script type="text/javascript" src="js/1.2/magic.js"></script>
-	<script type="text/javascript" src="js/1.2/bootstrap.min.js"></script>
-	<script type="text/javascript" src="js/1.2/jquery-ui-1.10.4.custom.min.js"></script>
-	<script type="text/javascript" src="js/1.2/bootstrap-switch.min.js"></script>
+
+	<!-- js -->
+	<script type="text/javascript" src="js/<?php print SCRIPT_PREFIX; ?>/jquery-3.1.1.min.js"></script>
+	<script type="text/javascript" src="js/<?php print SCRIPT_PREFIX; ?>/jclock.jquery.js"></script>
+	<?php if($_GET['page']=="login" || $_GET['page']=="request_ip") { ?>
+	<script type="text/javascript" src="js/<?php print SCRIPT_PREFIX; ?>/login.js"></script>
+	<?php } ?>
+	<script type="text/javascript" src="js/<?php print SCRIPT_PREFIX; ?>/magic.min.js"></script>
+	<script type="text/javascript" src="js/<?php print SCRIPT_PREFIX; ?>/bootstrap.min.js"></script>
+	<script type="text/javascript" src="js/<?php print SCRIPT_PREFIX; ?>/jquery-ui-1.10.4.custom.min.js"></script>
+	<script type="text/javascript" src="js/<?php print SCRIPT_PREFIX; ?>/bootstrap-switch.min.js"></script>
+	<script type="text/javascript" src="js/<?php print SCRIPT_PREFIX; ?>/bdt/jquery.sortelements.js"></script>
+	<script type="text/javascript" src="js/<?php print SCRIPT_PREFIX; ?>/bdt/jquery.bdt.js"></script>
+	<script type="text/javascript" src="js/<?php print SCRIPT_PREFIX; ?>/stickytableheaders/jquery.stickytableheaders.min.js"></script>
 	<script type="text/javascript">
 	$(document).ready(function(){
 	     if ($("[rel=tooltip]").length) { $("[rel=tooltip]").tooltip(); }
 	});
 	</script>
+	<?php if ($User->settings->enableThreshold=="1") { ?>
+	<script type="text/javascript" src="js/<?php print SCRIPT_PREFIX; ?>/bootstrap-slider.js"></script>
+	<?php }	?>
 	<!--[if lt IE 9]>
-	<script type="text/javascript" src="js/1.2/dieIE.js"></script>
+	<script type="text/javascript" src="js/<?php print SCRIPT_PREFIX; ?>/dieIE.js"></script>
 	<![endif]-->
+	<?php if ($User->settings->enableLocations=="1" && isset($gmaps_api_key) && strlen($gmaps_api_key)>0) { ?>
+	<script type="text/javascript" src="https://maps.google.com/maps/api/js<?php print "?key=".$gmaps_api_key; ?>"></script>
+	<script type="text/javascript" src="js/<?php print SCRIPT_PREFIX; ?>/gmaps.js"></script>
+	<?php }	?>
+
 </head>
 
 <!-- body -->
@@ -133,19 +159,40 @@ else {
 
 <!-- header -->
 <div class="row" id="header">
-	<!-- usermenu -->
-	<div class="col-lg-3 col-md-3 col-sm-6 col-xs-12 pull-right" id="user_menu">
-		<?php include('app/sections/user-menu.php'); ?>
+    <!-- logo -->
+	<div class="col-lg-3 col-md-3 col-sm-12 col-xs-12">
+    <?php
+	if(file_exists( dirname(__FILE__)."/css/".SCRIPT_PREFIX."/images/logo/logo.png")) {
+    	print "<img style='width:220px;margin:10px;margin-top:20px;' src='css/".SCRIPT_PREFIX."/images/logo/logo.png'>";
+	}
+    ?>
 	</div>
 	<!-- title -->
-	<div class="col-lg-6 col-lg-offset-3 col-md-6 col-md-offset-3 col-sm-12 col-xs-12">
+	<div class="col-lg-6 col-md-6 col-sm-12 col-xs-12">
 		<div class="hero-pusher hidden-xs hidden-sm"></div>
 		<div class="hero-unit">
 			<a href="<?php print create_link(null); ?>"><?php print $User->settings->siteTitle; ?></a>
+			<p class="muted">
+            <?php
+            $title = str_replace(" / ", "<span class='divider'>/</span>", $title);
+            $tmp = explode($User->settings->siteTitle, $title);
+            unset($tmp[0]);
+            print implode($User->settings->siteTitle, $tmp);
+            ?>
+            </p>
 		</div>
+	</div>
+	<!-- usermenu -->
+	<div class="col-lg-3 col-lg-offset-0 col-md-3 col-md-offset-0 col-sm-6 col-sm-offset-6 col-xs-12 " id="user_menu">
+		<?php include('app/sections/user-menu.php'); ?>
 	</div>
 </div>
 
+<!-- maintaneance mode -->
+<?php
+$text_append_maint = $User->is_admin(false) ? " <btn class='removeMaintaneance btn btn-xs btn-default'>"._("Remove")."</btn>" : "";
+if($User->settings->maintaneanceMode == "1") { $Result->show("warning text-center nomargin", "<i class='fa fa-info'></i> "._("System is running in maintenance mode")." !".$text_append_maint, false); }
+?>
 
 <!-- page sections / menu -->
 <div class="content">
@@ -184,13 +231,19 @@ else {
 			include_once("app/dashboard/widgets/index.php");
 			print "</div>";
 		}
+		/* all sections */
+		elseif($_GET['page']=="subnets" && strlen($_GET['section'])==0) {
+			print "<div id='dashboard' class='container'>";
+			include_once("app/sections/all-sections.php");
+			print "</div>";
+		}
 		/* content */
 		else {
 			print "<table id='subnetsMenu'>";
 			print "<tr>";
 
 			# fix for empty section
-			if( isset($_GET['section']) && (strlen($_GET['section']) == 0) )			{ unset($_GET['section']); }
+			if( isset($_GET['section']) && (strlen(@$_GET['section']) == 0) )			{ unset($_GET['section']); }
 
 			# hide left menu
 			if( ($_GET['page']=="tools"||$_GET['page']=="administration") && !isset($_GET['section'])) {
@@ -208,14 +261,12 @@ else {
 				print "</td>";
 
 			}
-
 			# content
 			print "<td id='subnetsContent'>";
 			print "<div class='row menu-$_GET[page]' id='content'>";
 				# subnets
 				if ($_GET['page']=="subnets") {
-					if(@$_GET['sPage'] == "address-details")							{ include("app/subnets/addresses/address-details.php"); }
-					elseif(@$_GET['sPage'] == "changelog")								{ include("app/subnets/subnet-changelog.php"); }
+					if(@$_GET['sPage'] == "address-details")							{ include("app/subnets/addresses/address-details-index.php"); }
 					elseif(!isset($_GET['subnetId']))									{ include("app/sections/section-subnets.php"); }
 					else																{ include("app/subnets/index.php"); }
 				}
@@ -229,8 +280,17 @@ else {
 				elseif ($_GET['page']=="tools") {
 					if (!isset($_GET['section']))										{ include("app/tools/index.php"); }
 					else {
-						if(!file_exists("app/tools/$_GET[section]/index.php")) 			{ header("Location: ".create_link("error","404")); }
-						else 															{ include("app/tools/$_GET[section]/index.php"); }
+                        if (!in_array($_GET['section'], $tools_menu_items))             { header("Location: ".create_link("error","400")); die(); }
+						elseif (!file_exists("app/tools/$_GET[section]/index.php") && !file_exists("app/tools/custom/$_GET[section]/index.php"))
+						                                                                { header("Location: ".create_link("error","404")); die(); }
+						else 															{
+    						if(file_exists("app/tools/$_GET[section]/index.php")) {
+        						include("app/tools/$_GET[section]/index.php");
+    						}
+    						else {
+        					    include("app/tools/custom/$_GET[section]/index.php");
+    						}
+                        }
 					}
 				}
 				# admin
@@ -241,13 +301,14 @@ else {
 					if (!isset($_GET['section']))										{ include("app/admin/index.php"); }
 					elseif (@$_GET['subnetId']=="section-changelog")					{ include("app/sections/section-changelog.php"); }
 					else {
-						if(!file_exists("app/admin/$_GET[section]/index.php")) 			{ header("Location: ".create_link("error","404")); }
+                        if (!in_array($_GET['section'], $admin_menu_items))             { header("Location: ".create_link("error","400")); die(); }
+						elseif(!file_exists("app/admin/$_GET[section]/index.php")) 		{ header("Location: ".create_link("error","404")); die(); }
 						else 															{ include("app/admin/$_GET[section]/index.php"); }
 					}
 				}
 				# default - error
 				else {
-																						{ header("Location: ".create_link("error","404")); }
+																						{ header("Location: ".create_link("error","400")); die(); }
 				}
 			print "</div>";
 			print "</td>";
@@ -277,6 +338,7 @@ else {
 
 <!-- export div -->
 <div class="exportDIV"></div>
+
 
 <!-- end body -->
 </body>

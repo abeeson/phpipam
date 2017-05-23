@@ -17,12 +17,21 @@ $Result 	= new Result ();
 $User->check_user_session();
 
 # create csrf token
-$csrf = $User->create_csrf_cookie ();
+$csrf = $User->csrf_cookie ("create", "group");
+
+# validate action
+$Admin->validate_action ($_POST['action']);
+
+# strip tags - XSS
+$_POST = $User->strip_input_tags ($_POST);
 
 # fetch group and set title
 if($_POST['action']=="add") {
 	$title = _('Add new group');
 } else {
+    # ID
+    if(!is_numeric($_POST['id']))   $Result->show("danger", _("Invalid Id"), true, true);
+
 	//fetch all group details
     $group = (array) $Admin->fetch_object("userGroups", "g_id", $_POST['id']);
     //false die

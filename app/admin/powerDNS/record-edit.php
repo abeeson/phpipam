@@ -19,13 +19,16 @@ $PowerDNS 	= new PowerDNS ($Database);
 $User->check_user_session();
 
 # create csrf token
-$csrf = $User->create_csrf_cookie ();
+$csrf = $User->csrf_cookie ("create", "record");
 
 # save settings for powerDNS default
 $pdns = $PowerDNS->db_settings;
 
 # default post
 $post = $_POST;
+
+# validate action
+$Admin->validate_action ($_POST['action'], true);
 
 # get record
 if($_POST['action']!="add") {
@@ -67,7 +70,7 @@ else {
 		}
 		else {
 			$record = new StdClass ();
-			$record->ttl = 3600;
+			$record->ttl = @$pdns->ttl;
 			$record->name = $post['domain_id'];
 			$record->content = $_POST['id'];
 		}

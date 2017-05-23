@@ -20,7 +20,7 @@ $Result 	= new Result ();
 $User->check_user_session();
 
 # create csrf token
-$csrf = $User->create_csrf_cookie ();
+$csrf = $User->csrf_cookie ("create", "requests");
 
 # fetch request
 $request = $Admin->fetch_object("requests", "id", $_POST['requestId']);
@@ -175,14 +175,16 @@ $custom_fields = $Tools->fetch_custom_fields('ipaddresses');
 				<option disabled><?php print _('Select device'); ?>:</option>
 				<option value="" selected><?php print _('None'); ?></option>
 				<?php
-				$devices = $Tools->fetch_devices();
+				$devices = $Tools->fetch_all_objects("devices", "hostname");
 				//loop
-				foreach($devices as $device) {
-					//cast
-					$device = (array) $device;
+				if ($devices!==false) {
+    				foreach($devices as $device) {
+    					//cast
+    					$device = (array) $device;
 
-					if($device['id'] == @$request['switch']) { print '<option value="'. $device['id'] .'" selected>'. $device['hostname'] .'</option>'. "\n"; }
-					else 									 { print '<option value="'. $device['id'] .'">'. 		 $device['hostname'] .'</option>'. "\n"; }
+    					if($device['id'] == @$request['switch']) { print '<option value="'. $device['id'] .'" selected>'. $device['hostname'] .'</option>'. "\n"; }
+    					else 									 { print '<option value="'. $device['id'] .'">'. 		 $device['hostname'] .'</option>'. "\n"; }
+    				}
 				}
 				?>
 			</select>
@@ -243,8 +245,8 @@ $custom_fields = $Tools->fetch_custom_fields('ipaddresses');
 	        elseif($myField['type'] == "date" || $myField['type'] == "datetime") {
 	            // just for first
 	            if($timeP==0) {
-	                print '<link rel="stylesheet" type="text/css" href="css/1.2/bootstrap/bootstrap-datetimepicker.min.css">';
-	                print '<script type="text/javascript" src="js/1.2/bootstrap-datetimepicker.min.js"></script>';
+	                print '<link rel="stylesheet" type="text/css" href="css/'.SCRIPT_PREFIX.'/bootstrap/bootstrap-datetimepicker.min.css">';
+	                print '<script type="text/javascript" src="js/'.SCRIPT_PREFIX.'/bootstrap-datetimepicker.min.js"></script>';
 	                print '<script type="text/javascript">';
 	                print '$(document).ready(function() {';
 	                //date only

@@ -17,7 +17,7 @@ $uwidgets = explode(";",$User->user->widgets);	//selected
 $uwidgets = array_filter((array) $uwidgets);
 
 # fetch all widgets
-$widgets = $Tools->fetch_widgets ($User->isadmin, false);
+$widgets = $Tools->fetch_widgets ($User->is_admin(false), false);
 $widgets = (array) $widgets;
 
 ?>
@@ -52,5 +52,5 @@ $widgets = (array) $widgets;
 
 <!-- footer -->
 <div class="pFooter">
-	<button class="btn btn-sm btn-default hidePopups"><?php print _('Cancel'); ?></button>
+	<button class="btn btn-sm btn-default hidePopups"><?php print _('Close'); ?></button>
 </div>

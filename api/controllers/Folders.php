@@ -8,6 +8,14 @@
  */
 class Folders_controller extends Common_api_functions {
 
+    /**
+     * Subnets_controller
+     *
+     * @var mixed
+     * @access protected
+     */
+    protected $Subnets_controller;
+
 	/**
 	 * __construct function
 	 *
@@ -18,10 +26,6 @@ class Folders_controller extends Common_api_functions {
 	 * @param mixed $Response
 	 */
 	public function __construct($Database, $Tools, $params, $Response) {
-		$this->Database = $Database;
-		$this->Tools 	= $Tools;
-		$this->_params 	= $params;
-		$this->Response = $Response;
 		// include
 		require("Subnets.php");
 		// subnets

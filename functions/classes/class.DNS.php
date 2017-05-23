@@ -7,26 +7,98 @@
 
 class DNS extends Common_functions {
 
-	/**
-	 * private variables
-	 */
-	public $settings = false;				// settings
-	private $type = "A";					// type of record to fetch
 
 	/**
-	 * object holders
-	 */
-	protected $Result;						//for Result printing
-	protected $Database;					//for Database connection
-
-
-
-	/**
-	 * __construct method
+	 * settings
 	 *
+	 * (default value: false)
+	 *
+	 * @var bool
 	 * @access public
 	 */
-	public function __construct (Database_PDO $Database, $settings=null) {
+	public $settings = false;
+
+	/**
+	 * type of record to fetch
+	 *
+	 * (default value: "A")
+	 *
+	 * @var string
+	 * @access private
+	 */
+	private $type = "A";
+
+	/**
+	 * Result
+	 *
+	 * @var mixed
+	 * @access public
+	 */
+	public $Result;
+
+	/**
+	 * Database
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
+	protected $Database;
+
+	/**
+	 * DNS type - local (no DNS set for subnet) or remote
+	 *
+	 * @var string
+	 */
+	public $dns_type = "local";
+
+	/**
+	 * Flag if local DNS in /etc/resolv.conf cannot be accessed
+	 *
+	 * @var bool
+	 */
+	public $local_failed = false;
+
+	/**
+	 * Array of DNS servers to use
+	 *
+	 * @var array
+	 */
+	public $ns = array();
+
+	/**
+	 * Array of dead NS
+	 *
+	 * @var array
+	 */
+	public $dead_ns = array();
+
+	/**
+	 * Print error if DNS is not accessible
+	 *
+	 * @var bool
+	 */
+	public $print_error = false;
+
+
+
+
+	/**
+	 * __construct function.
+	 *
+	 * @access public
+	 * @param Database_PDO $Database
+	 * @param mixed $settings (default: null)
+	 */
+
+	/**
+	 * __construct function
+	 *
+	 * @method __construct
+	 * @param  Database_PDO $Database
+	 * @param  object|array $settings
+	 * @param  bool         $print_error
+	 */
+	public function __construct (Database_PDO $Database, $settings=null, $print_error = false) {
 		# initialize Result
 		$this->Result = new Result ();
 		# initialize object
@@ -35,6 +107,8 @@ class DNS extends Common_functions {
 		$this->settings = !is_null($settings) ? (object) $settings : $this->get_settings ();
 		// initialize resolver
 		$this->initialize_pear_net_DNS2 ();
+		// set print error flg
+		$this->print_error = $print_error;
 	}
 
 
@@ -46,55 +120,47 @@ class DNS extends Common_functions {
 	 * @return void
 	 */
 	private function set_nameservers ($nsid = null) {
-		// null ?
-		if (is_null($nsid))								{ return false; }
-		// not numeric
-		elseif (!is_numeric($nsid))						{ return false; }
-		// ok
-		else {
-			// fetch nameservers
-			$nameservers =  $this->fetch_object ("nameservers", "id", $nsid);
-			// error
-			if ($nameservers===false)					{ return false; }
-			// ok
-			else {
-				if (strlen($nameservers->namesrv1)==0)	{ return false; }
-				else {
-					$this->ns = explode(";", $nameservers->namesrv1);
-				}
-			}
-		}
-	}
-
-	/**
-	 * Fetches object from database
-	 *
-	 * @access private
-	 * @param mixed $table (default: null)
-	 * @param mixed $field (default: null)
-	 * @param mixed $value (default: null)
-	 * @return void
-	 */
-	private function fetch_object ($table = null, $field = null, $value = null) {
-		// checks
-		if(is_null($table))		return false;
-		if(is_null($field))		return false;
-		if(is_null($value))		return false;
-		if($value=="0")			return false;
-		// escape
-		$table = $this->Database->escape($table);
-		$field = $this->Database->escape($field);
-
-		// fetch
-		try { $res = $this->Database->getObjectQuery("SELECT * from `$table` where `$field` = ? limit 1;", array($value)); }
-		catch (Exception $e) {
-			$this->Result->show("danger", _("Error: ").$e->getMessage());
+		// null or invalid
+		if(is_null($nsid) || !is_numeric($nsid) || $nsid==0) {
+			// set type
+			$this->dns_type = "local";
 			return false;
 		}
-		# save to cache array
-		if(sizeof($res)==0) { return false; }
+		// ok
 		else {
-			return $res;
+			// set type to remote
+			$this->dns_type = "remote";
+			// fetch nameservers
+			$nameservers = $this->fetch_object ("nameservers", "id", $nsid);
+			// error
+			if ($nameservers===false) {
+				return false;
+			}
+			// ok
+			else {
+				if (strlen($nameservers->namesrv1)==0) {
+					return false;
+				}
+				else {
+					// to array
+					$nsarray = explode(";", $nameservers->namesrv1);
+					// check against dead NSes
+					foreach ($nsarray as $k=>$nsserv) {
+						trim($nsserv);
+						if(in_array($nsserv, $this->dead_ns)) {
+							unset($nsarray[$k]);
+						}
+					}
+					// save active
+					if(sizeof($nsarray)>0) {
+						$this->ns = $nsarray;
+					}
+					else {
+						$this->ns = array();
+						return false;
+					}
+				}
+			}
 		}
 	}
 
@@ -121,8 +187,12 @@ class DNS extends Common_functions {
 		}
 		// if settings permits to check or override is set
 		elseif($this->settings->enableDNSresolving == 1 || $override===true) {
+			// ignore if remote DNS failed
+			if ($this->dns_type=="remote" && sizeof($this->ns)==0) {
+				return array("class"=>"", 		"address"=>$address, "name"=>$hostname);
+			}
 			// if address is set fetch A record
-			if ($address!==false && strlen($address)>0) {
+			elseif ($address!==false && strlen($address)>0) {
 				// set resolve type
 				$this->type = "PTR";
 
@@ -157,16 +227,53 @@ class DNS extends Common_functions {
 	 */
 	public function resolve_address_net_dns ($address) {
 		// set nameservers
-		if (isset($this->ns))
-		$this->DNS2->setServers ($this->ns);
+		if (sizeof($this->ns)>0) {
+			// check each , if dead remove it !
+			foreach ($this->ns as $nk=>$ns) {
+				if (!in_array($ns, $this->dead_ns)) {
+					$this->DNS2->setServers (array($ns));
 
-		// try to get record
-		try {
-		    $result = $this->DNS2->query($address, $this->type);
-		} catch(Net_DNS2_Exception $e) {
-			// log error
-			$this->resolve_error = $e->getMessage();
-			return false;
+					// try to get record
+					try {
+					    $result = $this->DNS2->query($address, $this->type);
+					} catch(Net_DNS2_Exception $e) {
+						// log error
+						$this->resolve_error = $e->getMessage();
+						// if server inaccessible remove it from array of ns
+						if(strpos($this->resolve_error, "timeout")!==false) {
+							$this->dead_ns[] = $ns;
+							if($this->print_error) {
+								$this->Result->show("warning", _("DNS error ($ns): ".$this->resolve_error));
+							}
+							array_unique($this->dead_ns);
+						}
+					}
+				}
+			}
+		}
+		// no NS, default query from /etc/hosts
+		elseif($this->local_failed===false) {
+			// try to get record
+			try {
+			    $result = $this->DNS2->query($address, $this->type);
+			} catch(Net_DNS2_Exception $e) {
+				// set flag
+				$this->local_failed = true;
+				// log error
+				$this->resolve_error = $e->getMessage();
+				// if server inaccessible remove it from array of ns
+				if(strpos($this->resolve_error, "timeout")!==false) {
+					// check which DNS caused problems
+					$dns_exception_list = $this->DNS2->last_exception_list;
+					// loop
+					foreach ($dns_exception_list as $ns=>$val) {
+						if($this->print_error) {
+							$this->Result->show("warning", _("DNS error ($ns): ".$this->resolve_error));
+						}
+					}
+				}
+				return false;
+			}
 		}
 
 		// return response
@@ -175,8 +282,8 @@ class DNS extends Common_functions {
 			$search = $this->type=="PTR" ? "ptrdname" : "address";
 
 			foreach($result->answer as $mxrr) {
-				if ($mxrr->$search) {
-					return $mxrr->$search;
+				if ($mxrr->{$search}) {
+					return $mxrr->{$search};
 				}
 			}
 		}
@@ -184,5 +291,4 @@ class DNS extends Common_functions {
 			return false;
 		}
 	}
-
 }

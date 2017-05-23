@@ -1,3 +1,15 @@
+<IfModule mod_deflate.c>
+AddOutputFilterByType DEFLATE text/plain
+AddOutputFilterByType DEFLATE text/html
+AddOutputFilterByType DEFLATE text/xml
+AddOutputFilterByType DEFLATE text/css
+AddOutputFilterByType DEFLATE application/xml
+AddOutputFilterByType DEFLATE application/xhtml+xml
+AddOutputFilterByType DEFLATE application/rss+xml
+AddOutputFilterByType DEFLATE application/javascript
+AddOutputFilterByType DEFLATE application/x-javascript
+</IfModule>
+
 <IfModule mod_rewrite.c>
 
 # apache auth basic auth example
@@ -9,32 +21,34 @@
 RewriteEngine on
 
 # change rewrite base if not in root
+# also add prefix to ErrorDocument
 # RewriteBase /
 
 # passthroughs
 RewriteRule ^api/.$ - [L]
 RewriteRule ^index.php$ - [L]
 RewriteRule ^(css|js|site|test)/.*$ - [L]
-RewriteRule site/login/captcha/captchashow.php - [L]
+RewriteRule app/login/captcha/captchashow.php - [L]
 
 # redirect errors
-ErrorDocument 400 /error/400/
-ErrorDocument 401 /error/401/
-ErrorDocument 403 /error/403/
-ErrorDocument 404 /error/404/
-ErrorDocument 500 /error/500/
+ErrorDocument 400 /app/error/index.php
+ErrorDocument 401 /app/error/index.php
+ErrorDocument 403 /app/error/index.php
+ErrorDocument 404 /app/error/index.php
+ErrorDocument 500 /app/error/index.php
 
 # IE login dashboard fix
 RewriteRule ^login/dashboard/$ dashboard/ [R]
 RewriteRule ^logout/dashboard/$ dashboard/ [R]
 # search override
-RewriteRule ^tools/search/(.*)/(.*)/(.*)/(.*)/(.*)$ index.php?page=tools&section=search&addresses=$1&subnets=$2&vlans=$3&vrf=$4&ip=$5 [L]
+RewriteRule ^tools/search/(.*)$ index.php?page=tools&section=search&ip=$1 [L]
 
 # Rewrites
+RewriteRule ^(.*)/(.*)/(.*)/(.*)/(.*)/(.*)/$ index.php?page=$1&section=$2&subnetId=$3&sPage=$4&ipaddrid=$5&tab=$6 [L]
 RewriteRule ^(.*)/(.*)/(.*)/(.*)/(.*)/$ index.php?page=$1&section=$2&subnetId=$3&sPage=$4&ipaddrid=$5 [L]
 RewriteRule ^(.*)/(.*)/(.*)/(.*)/$ index.php?page=$1&section=$2&subnetId=$3&sPage=$4 [L]
 RewriteRule ^(.*)/(.*)/(.*)/$ index.php?page=$1&section=$2&subnetId=$3 [L]
-RewriteRule ^(.*)/(.*)/$ index.php?page=$1&section=$2 [L]
+RewriteRule ^(.*)/(.*)/$ index.php?page=$1&section=$2 [L,QSA]
 RewriteRule ^(.*)/$ index.php?page=$1 [L]
 
 </IfModule>

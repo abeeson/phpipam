@@ -16,9 +16,15 @@ $Result 	= new Result ();
 
 # verify that user is logged in
 $User->check_user_session();
+# check maintaneance mode
+$User->check_maintaneance_mode ();
+
+# strip input tags
+$_POST = $Admin->strip_input_tags ($_POST);
+$_POST = $Admin->trim_array_objects ($_POST);
 
 # validate csrf cookie
-$_POST['csrf_cookie']==$_SESSION['csrf_cookie'] ? :                      $Result->show("danger", _("Invalid CSRF cookie"), true);
+$User->csrf_cookie ("validate", "user", $_POST['csrf_cookie']) === false ? $Result->show("danger", _("Invalid CSRF cookie"), true) : "";
 
 # fetch auth method
 $auth_method = $Admin->fetch_object ("usersAuthMethod", "id", $_POST['authMethod']);
@@ -33,7 +39,8 @@ if($_POST['action']=="edit"||$_POST['action']=="delete") {
 }
 
 # if password changes check and hash passwords
-if(strlen(@$_POST['password1'])>0 || (@$_POST['action']=="add" && $auth_method->type=="local")) {
+if($auth_method->type != "local") { $_POST['password1'] = ""; $_POST['password2'] = ""; }
+if((strlen(@$_POST['password1'])>0 || (@$_POST['action']=="add") && $auth_method->type=="local")) {
 	//checks
 	if($_POST['password1']!=$_POST['password2'])						{ $Result->show("danger", _("Passwords do not match"), true); }
 	if(strlen($_POST['password1'])<8)									{ $Result->show("danger", _("Password must be at least 8 characters long!"), true); }
@@ -51,7 +58,7 @@ if (!$Result->validate_email(@$_POST['email'])) 						{ $Result->show("danger", 
 if ($_POST['action']=="add") {
 	//username > 8 chars
 	if ($auth_method->type=="local") {
-		if(strlen($_POST['username'])<6)								{ $Result->show("danger", _("Username must be at least 6 characters long!"), true); }
+		if(strlen($_POST['username'])<3)								{ $Result->show("danger", _("Username must be at least 3 characters long!"), true); }
 	} else {
 		if(strlen($_POST['username'])==0)								{ $Result->show("danger", _("Username must be at least 1 character long!"), true); }
 	}
@@ -75,7 +82,7 @@ if(sizeof($myFields) > 0) {
 		//booleans can be only 0 and 1!
 		if($myField['type']=="tinyint(1)") {
 			if($_POST[$myField['name']]>1) {
-				$$_POST[$myField['name']] = "";
+				$_POST[$myField['name']] = "";
 			}
 		}
 		//not null!
@@ -96,8 +103,19 @@ $values = array("id"=>@$_POST['userId'],
 				"lang"=>$_POST['lang'],
 				"mailNotify"=>$_POST['mailNotify'],
 				"mailChangelog"=>$_POST['mailChangelog'],
+				"editVlan"=>$_POST['editVlan'],
+				"pstn"=>$_POST['pstn'],
 				"pdns"=>$_POST['pdns']
 				);
+# custom fields
+if (sizeof($myFields)>0) {
+    foreach($myFields as $myField) {
+		# replace possible ___ back to spaces!
+		$myField['nameTest']      = str_replace(" ", "___", $myField['name']);
+
+		if(isset($_POST[$myField['nameTest']])) { $values[$myField['name']] = $_POST[$myField['nameTest']];}
+    }
+}
 # update pass ?
 if(strlen(@$_POST['password1'])>0 || (@$_POST['action']=="add" && $auth_method->type=="local")) {
 	$values['password'] = $_POST['password1'];
@@ -124,5 +142,3 @@ else																	{ $Result->show("success", _("User $_POST[action] successfu
 
 # mail user
 if($Admin->verify_checkbox(@$_POST['notifyUser'])!="0") { include("edit-notify.php"); }
-
-?>

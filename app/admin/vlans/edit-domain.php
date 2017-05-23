@@ -19,7 +19,10 @@ $Result 	= new Result ();
 $User->check_user_session();
 
 # create csrf token
-$csrf = $User->create_csrf_cookie ();
+$csrf = $User->csrf_cookie ("create", "vlan_domain");
+
+# strip tags - XSS
+$_POST = $User->strip_input_tags ($_POST);
 
 # fetch vlan details
 $l2_domain = $Admin->fetch_object ("vlanDomains", "id", @$_POST['id']);
@@ -77,7 +80,7 @@ $(document).ready(function(){
 		$domain_sections = is_array($domain_sections) ? $domain_sections : array();
 		// loop
 		if($sections!==false) {
-			foreach($Sections->sections as $section) {
+			foreach($sections as $section) {
 				if(in_array($section->id, @$domain_sections) || @$l2_domain['id']=="1") 	{ print '<div class="checkbox" style="margin:0px;"><input type="checkbox" name="section-'. $section->id .'" value="on" checked> '. $section->name .'</div>'. "\n"; }
 				else 																		{ print '<div class="checkbox" style="margin:0px;"><input type="checkbox" name="section-'. $section->id .'" value="on">'. $section->name .'</span></div>'. "\n"; }
 			}

@@ -4,56 +4,62 @@
  * Function to add / edit / delete subnet
  ********************************************/
 
-/* functions */
-require( dirname(__FILE__) . '/../../../functions/functions.php');
+/* this can come from snmp, so if objects are already initialized print it */
+if (!function_exists("create_link")) {
+    /* functions */
+    require( dirname(__FILE__) . '/../../../functions/functions.php');
 
-# initialize user object
-$Database 	= new Database_PDO;
-$User 		= new User ($Database);
-$Admin	 	= new Admin ($Database, false);
-$Subnets	= new Subnets ($Database);
-$Sections	= new Sections ($Database);
-$Addresses	= new Addresses ($Database);
-$Tools		= new Tools ($Database);
-$Result 	= new Result ();
+    # initialize user object
+    $Database 	= new Database_PDO;
+    $User 		= new User ($Database);
+    $Admin	 	= new Admin ($Database, false);
+    $Subnets	= new Subnets ($Database);
+    $Sections	= new Sections ($Database);
+    $Addresses	= new Addresses ($Database);
+    $Tools		= new Tools ($Database);
+    $Result 	= new Result ();
+}
 
 # verify that user is logged in
 $User->check_user_session();
+# check maintaneance mode
+$User->check_maintaneance_mode ();
+
+# strip input tags
+$_POST = $Admin->strip_input_tags($_POST);
 
 # validate csrf cookie
-$_POST['csrf_cookie']==$_SESSION['csrf_cookie'] ? :               $Result->show("danger", _("Invalid CSRF cookie"), true);
-
-
-# ID must be numeric
 if($_POST['action']=="add") {
-	if(!is_numeric($_POST['sectionId']))						{ $Result->show("danger", _("Invalid ID"), true); }
-} else {
-	if(!is_numeric($_POST['subnetId']))							{ $Result->show("danger", _("Invalid ID"), true); }
-	if(!is_numeric($_POST['sectionId']))						{ $Result->show("danger", _("Invalid ID"), true); }
+	$User->csrf_cookie ("validate", "subnet_add", $_POST['csrf_cookie']) === false ? $Result->show("danger", _("Invalid CSRF cookie"), true) : "";
 }
+else {
+	$User->csrf_cookie ("validate", "subnet_".$_POST['subnetId'], $_POST['csrf_cookie']) === false ? $Result->show("danger", _("Invalid CSRF cookie"), true) : "";
+}
+
 # if show name than description must be set
 if(@$_POST['showName']==1 && strlen($_POST['description'])==0) 	{ $Result->show("danger", _("Please enter subnet description to show as name!"), true); }
 
-# verify that user has permissions to add subnet
-if($_POST['action']=="add") {
-	if($Sections->check_permission ($User->user, $_POST['sectionId']) != 3) { $Result->show("danger", _('You do not have permissions to add new subnet in this section')."!", true, true); }
-}
-# otherwise check subnet permission
-else {
-	if($Subnets->check_permission ($User->user, $_POST['subnetId']) != 3) 	{ $Result->show("danger", _('You do not have permissions to add edit/delete this subnet')."!", true, true); }
-}
-
 # we need old values for mailing
 if($_POST['action']=="edit" || $_POST['action']=="delete") {
-	$subnet_old_details = (array) $Subnets->fetch_subnet(null, $_POST['subnetId']);
+	$old_subnet_details = $Subnets->fetch_subnet("id", $_POST['subnetId']);
+	if($old_subnet_details===false)								{ $Result->show("danger", _("Invalid subnet Id"), true); }
 }
 
+# modify post parameters
+$_POST['cidr'] = trim($_POST['subnet']);
+$_POST['id']   = $_POST['subnetId'];
+
 # get mask and subnet
-$_POST['mask']=trim(strstr($_POST['subnet'], "/"),"/");
-$_POST['subnet']=strstr($_POST['subnet'], "/",true);
-$_POST['id']=$_POST['subnetId'];
-//set cidr
-$_POST['cidr'] = $_POST['subnet']."/".$_POST['mask'];
+$temp = explode("/", $_POST['subnet']);
+$_POST['mask']   = trim($temp[1]);
+$_POST['subnet'] = trim($temp[0]);
+
+
+# errors array
+$errors = array ();
+# default vrf
+if(!isset($_POST['vrfId']) || $_POST['vrfId']==null)	{ $_POST['vrfId'] = 0; }
+if(!is_numeric($_POST['vrfId']))						{ $_POST['vrfId'] = 0; }
 
 
 # get section details
@@ -69,79 +75,56 @@ if($_POST['masterSubnetId']!=0)	{
 }
 else 									{ $parent_is_folder = false; }
 
+# If request came from IP address subnet edit and action2 is Delete then change action
+if(@$_POST['action2']=="delete")        { $_POST['action'] = $_POST['action2']; }
 
-/**
- * If request came from IP address subnet edit and
- * action2 is Delete then change action
- */
-if(	(isset($_POST['action2'])) && ($_POST['action2']=="delete") ) {
-	$_POST['action'] = $_POST['action2'];
-}
 
-/**
- *	If section changes then do checks!
- */
-if ( ($_POST['sectionId'] != @$_POST['sectionIdNew']) && $_POST['action']=="edit" ) {
-	//reset masterId - we are putting it to root
-	$_POST['masterSubnetId'] = 0;
 
-    //check for overlapping
-    $sectionIdNew = (array) $Sections->fetch_section(null, $_POST['sectionIdNew']);
-    if($sectionIdNew['strictMode']==1 && !$parent_is_folder) {
-    	/* verify that no overlapping occurs if we are adding root subnet */
-    	$overlap=$Subnets->verify_subnet_overlapping ($_POST['sectionIdNew'], $_POST['cidr'], $_POST['vrfId']);
-    	if($overlap!==false) {
-	    	$errors[] = $overlap;
-	    }
-    }
-}
-/**
- * Execute checks on add only and when root subnet is being added
- */
-else if (($_POST['action']=="add") && ($_POST['masterSubnetId']==0)) {
+# new subnet checks
+if ($_POST['action']=="add") {
+
+	# Generic checks
+
+    // ID must be numberic value
+	if(!is_numeric($_POST['sectionId']))									{ $Result->show("danger", _("Invalid ID"), true); }
+    // verify that user has permissions to add subnet
+    if($Sections->check_permission ($User->user, $_POST['sectionId']) != 3) { $Result->show("danger", _('You do not have permissions to add new subnet in this section')."!", true); }
+
     //verify cidr
     $cidr_check = $Subnets->verify_cidr_address($_POST['cidr']);
-    if(strlen($cidr_check)>5) {
-	    $errors[] = $cidr_check;
+    if(strlen($cidr_check)>5) 												{ $errors[] = $cidr_check; }
+
+
+    # Set permissions if adding new subnet
+	// root
+	if($_POST['masterSubnetId']==0) {
+		$_POST['permissions'] = $section['permissions'];
 	}
-    //check for overlapping
-    if($section['strictMode']==1 && !$parent_is_folder) {
-    	/* verify that no overlapping occurs if we are adding root subnet
-	       only check for overlapping if vrf is empty or not exists!
-    	*/
-    	$overlap=$Subnets->verify_subnet_overlapping ($_POST['sectionId'], $_POST['cidr'], $_POST['vrfId']);
-    	if($overlap!==false) {
-	    	$errors[] = $overlap;
-	    }
-    }
-}
-/**
- * Execute different checks on add only and when subnet is nested
- */
-else if ($_POST['action']=="add") {
-    //verify cidr
-    $cidr_check = $Subnets->verify_cidr_address($_POST['cidr']);
-    if(strlen($cidr_check)>5) {
-	    $errors[] = $cidr_check;
+	// nested - inherit parent permissions
+	else {
+		# get parent
+		$parent = $Subnets->fetch_subnet(null, $_POST['masterSubnetId']);
+		$_POST['permissions'] = $parent->permissions;
 	}
-    //disable checks for folders and if strict check enabled
+
+
+    // make subnet checks only if strictmode is true
     if($section['strictMode']==1 && !$parent_is_folder ) {
-
-	    //verify that nested subnet is inside root subnet
+	    // we are adding nested subnet
 	    if($_POST['masterSubnetId']!=0) {
+    	    //verify that nested subnet is inside its parent
 	        if (!$Subnets->verify_subnet_nesting($_POST['masterSubnetId'], $_POST['cidr'])) {
 	            $errors[] = _('Nested subnet not in root subnet!');
 	        }
-        }
-
-	    //nested?
-	    if($_POST['masterSubnetId']!= 0) {
-	        $overlap = $Subnets->verify_nested_subnet_overlapping($_POST['sectionId'], $_POST['cidr'], $_POST['vrfId'], $_POST['masterSubnetId']);
-			if($overlap!==false) {
-	            $errors[] = $overlap;
+	        else {
+    	        //check for overlapping against existing subnets under same master
+    	        $overlap = $Subnets->verify_nested_subnet_overlapping($_POST['sectionId'], $_POST['cidr'], $_POST['vrfId'], $_POST['masterSubnetId']);
+    			if($overlap!==false) {
+    	            $errors[] = $overlap;
+    	        }
 	        }
-	    }
-	    //not nested
+        }
+	    // root subnet, check overlapping against other root subnetss
 	    else {
 	       $overlap = $Subnets->verify_subnet_overlapping($_POST['sectionId'], $_POST['cidr'], $_POST['vrfId']);
 	    	if($overlap!==false) {
@@ -149,28 +132,105 @@ else if ($_POST['action']=="add") {
 	        }
 	    }
     }
+	# parent is folder checks
+	elseif($section['strictMode']==1) {
+        //check for overlapping against existing subnets under same master
+        $overlap = $Subnets->verify_nested_subnet_overlapping($_POST['sectionId'], $_POST['cidr'], $_POST['vrfId'], $_POST['masterSubnetId']);
+		if($overlap!==false) {
+            $errors[] = $overlap;
+        }
+	    // we need to validate against all root subnets inside section
+	    $overlap = $Subnets->verify_subnet_overlapping($_POST['sectionId'], $_POST['cidr'], $_POST['vrfId']);
+    	if($overlap!==false) {
+            $errors[] = $overlap;
+        }
+	    // we need to check also all other folders for same subnets !
+	    $overlap = $Subnets->verify_subnet_interfolder_overlapping($_POST['sectionId'], $_POST['cidr'], $_POST['vrfId']);
+    	if($overlap!==false) {
+            $errors[] = $overlap;
+        }
+	}
+
+	# If VRF is defined check for uniqueness globally or if selected !
+	if ($_POST['vrfId']>0 || $User->settings->enforceUnique=="1" && $section['strictMode']==1) {
+		# make vrf overlapping check
+		$overlap = $Subnets->verify_vrf_overlapping ($_POST['cidr'], $_POST['vrfId'], 0, $_POST['masterSubnetId']);
+		if($overlap!==false) {
+			$errors[] = $overlap;
+		}
+	}
 }
-/**
- * Check if slave is under master
- */
-else if ($_POST['action']=="edit") {
-    if($section['strictMode']==1 && !$parent_is_folder) {
-    	/* verify that nested subnet is inside root subnet */
-    	if($_POST['masterSubnetId'] != 0) {
-	    	if (!$overlap = $Subnets->verify_subnet_nesting($_POST['masterSubnetId'], $_POST['cidr'])) {
-	    		$errors[] = _('Nested subnet not in root subnet!');
-	    	}
-    	}
-    }
-    /* for nesting - MasterId cannot be the same as subnetId! */
+# edit checks
+elseif ($_POST['action']=="edit") {
+    // validate IDs
+	if(!is_numeric($_POST['subnetId']))							{ $Result->show("danger", _("Invalid ID"), true); }
+	if(!is_numeric($_POST['sectionId']))						{ $Result->show("danger", _("Invalid ID"), true); }
+
+    // check subnet permissions
+    if($Subnets->check_permission ($User->user, $_POST['subnetId']) != 3) 	{ $Result->show("danger", _('You do not have permissions to add edit/delete this subnet')."!", true); }
+
+    // for nesting - MasterId cannot be the same as subnetId
     if ( $_POST['masterSubnetId']==$_POST['subnetId'] ) {
     	$errors[] = _('Subnet cannot nest behind itself!');
     }
+
+    // If section changes then do checks!
+    if ($_POST['sectionId'] != @$_POST['sectionIdNew']) {
+    	//reset masterId - we are putting it to root
+    	$_POST['masterSubnetId'] = 0;
+        //check for overlapping
+        $sectionIdNew = (array) $Sections->fetch_section(null, $_POST['sectionIdNew']);
+        if($sectionIdNew['strictMode']==1 && !$parent_is_folder) {
+        	/* verify that no overlapping occurs if we are adding root subnet */
+        	$overlap=$Subnets->verify_subnet_overlapping ($_POST['sectionIdNew'], $_POST['cidr'], $_POST['vrfId']);
+        	if($overlap!==false) {
+    	    	$errors[] = $overlap;
+    	    }
+        }
+    }
+
+    // if strict mode is enforced do checks
+    if ($section['strictMode']==1) {
+    	// not if parent is folder
+    	if ($parent_is_folder===false) {
+    		/* verify that nested subnet is inside root subnet */
+	    	if($_POST['masterSubnetId'] != 0) {
+		    	if (!$overlap = $Subnets->verify_subnet_nesting($_POST['masterSubnetId'], $_POST['cidr'])) {
+		    		$errors[] = _('Nested subnet not in root subnet!');
+		    	}
+	    	}
+    	}
+    }
+
+	// parent is folder and folder does not permit overlapping
+	if (($_POST['vrfId'] != @$_POST['vrfIdOld']) && $section['strictMode']==1) {
+    	$overlap=$Subnets->verify_subnet_overlapping ($_POST['sectionId'], $_POST['cidr'], $_POST['vrfId'], $_POST['masterSubnetId']);
+    	if($overlap!==false) {
+	    	$errors[] = $overlap;
+	    }
+    }
+
+	# If VRF is defined check for uniqueness globally or if selected !
+	if ($_POST['vrfId']>0 || $User->settings->enforceUnique=="1" && $section['strictMode']==1) {
+		# make vrf overlapping check
+		$overlap = $Subnets->verify_vrf_overlapping ($_POST['cidr'], $_POST['vrfId'], $old_subnet_details->id, $_POST['masterSubnetId']);
+		if($overlap!==false) {
+			$errors[] = $overlap;
+		}
+	}
 }
-else {}
+# delete checks
+else {
+    // validate IDs
+	if(!is_numeric($_POST['subnetId']))							{ $Result->show("danger", _("Invalid ID"), true); }
+	if(!is_numeric($_POST['sectionId']))						{ $Result->show("danger", _("Invalid ID"), true); }
+    // check subnet permissions
+    if($Subnets->check_permission ($User->user, $_POST['subnetId']) != 3) 	{ $Result->show("danger", _('You do not have permissions to add edit/delete this subnet')."!", true); }
+}
 
 
-//custom fields
+
+//custom fields check
 if(sizeof($custom) > 0) {
 	foreach($custom as $myField) {
 		//booleans can be only 0 and 1!
@@ -186,23 +246,12 @@ if(sizeof($custom) > 0) {
 	}
 }
 
-# Set permissions if adding new subnet
-if($_POST['action']=="add") {
-	# root
-	if($_POST['masterSubnetId']==0) {
-		$_POST['permissions'] = $section['permissions'];
-	}
-	# nested - inherit parent permissions
-	else {
-		# get parent
-		$parent = $Subnets->fetch_subnet(null, $_POST['masterSubnetId']);
-		$_POST['permissions'] = $parent->permissions;
-	}
-}
 
 
 /* If no errors are present execute request */
-if (sizeof(@$errors)>0) {
+if (sizeof($errors)>0) {
+	//unique
+	$errors = array_unique($errors);
     print '<div class="alert alert-danger"><strong>'._('Please fix following problems').'</strong>:';
     foreach ($errors as $error) { print "<br>".$error; }
     print '</div>';
@@ -264,6 +313,20 @@ else {
 					"device"=>$_POST['device'],
                     "isFull"=>$Admin->verify_checkbox($_POST['isFull'])
 					);
+    # location
+    if (isset($_POST['location_item'])) {
+        if (!is_numeric($_POST['location_item'])) {
+            $Result->show("danger", _("Invalid location value"), true);
+        }
+        $values['location'] = $_POST['location_item'];
+    }
+    # threshold
+    if (isset($_POST['threshold'])) {
+        if (!is_numeric($_POST['threshold'])) {
+            $Result->show("danger", _("Invalid threshold value"), true);
+        }
+        $values['threshold'] = $_POST['threshold'];
+    }
 	# for new subnets we add permissions
 	if($_POST['action']=="add") {
 		$values['permissions']=$_POST['permissions'];
@@ -367,15 +430,15 @@ else {
 		if($PowerDNS->db_check()===false) { $Result->show("danger", _("Cannot connect to powerDNS database"), true); }
 
 		// set zone
-		$zone = $_POST['action']=="add" ? $PowerDNS->get_ptr_zone_name ($_POST['subnet'], $_POST['mask']) : $PowerDNS->get_ptr_zone_name ($subnet_old_details['ip'], $subnet_old_details['mask']);
+		$zone = $_POST['action']=="add" ? $PowerDNS->get_ptr_zone_name ($_POST['subnet'], $_POST['mask']) : $PowerDNS->get_ptr_zone_name ($old_subnet_details->ip, $old_subnet_details->mask);
 		// try to fetch domain
 		$domain = $PowerDNS->fetch_domain_by_name ($zone);
 
 		// POST DNSrecursive not set, fake it if old is also 0
-		if (!isset($_POST['DNSrecursive']) && @$subnet_old_details['DNSrecursive']==0) { $_POST['DNSrecursive'] = 0; }
+		if (!isset($_POST['DNSrecursive']) && @$old_subnet_details->DNSrecursive==0) { $_POST['DNSrecursive'] = 0; }
 
 		// recreate csrf cookie
-		$csrf = $User->create_csrf_cookie ();
+        $csrf = $User->csrf_cookie ("create", "domain");
 
 		//delete
 		if ($_POST['action']=="delete") {
@@ -410,7 +473,7 @@ else {
 			}
 		}
 		// update
-		elseif ($_POST['action']=="edit" && $_POST['DNSrecursive']!=$subnet_old_details['DNSrecursive']) {
+		elseif ($_POST['action']=="edit" && $_POST['DNSrecursive']!=$old_subnet_details->DNSrecursive) {
 			// remove domain
 			if (!isset($_POST['DNSrecursive']) && $domain!==false) {
 				print "<hr><p class='hidden alert-danger'></p>";
@@ -441,7 +504,7 @@ else {
 
 				// create PTR records
 				$Addresses->pdns_validate_connection ();
-				$hosts = $Addresses->fetch_subnet_addresses ($subnet_old_details['id'], "ip_addr", "asc");
+				$hosts = $Addresses->fetch_subnet_addresses ($old_subnet_details->id, "ip_addr", "asc");
 				// loop
 				if (sizeof($hosts)>0) {
 					$cnt = 0;

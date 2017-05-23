@@ -17,9 +17,11 @@ $Result 	= new Result ();
 
 # verify that user is logged in
 $User->check_user_session();
+# check maintaneance mode
+$User->check_maintaneance_mode ();
 
 # validate csrf cookie
-$_POST['csrf_cookie']==$_SESSION['csrf_cookie'] ? :                      $Result->show("danger", _("Invalid CSRF cookie"), true);
+$User->csrf_cookie ("validate", "split", $_POST['csrf_cookie']) === false ? $Result->show("danger", _("Invalid CSRF cookie"), true) : "";
 
 
 # id must be numeric
@@ -33,9 +35,7 @@ $subnetPerm = $Subnets->check_permission ($User->user, $subnet_old->id);
 if($subnetPerm < 3) 						{ $Result->show("danger", _('You do not have permissions to resize subnet').'!', true); }
 
 # verify
-$Subnets->subnet_split ($subnet_old, $_POST['number'], $_POST['prefix'],$_POST['group'], $_POST['strict']);
+$Subnets->subnet_split ($subnet_old, $_POST['number'], $_POST['prefix'], @$_POST['group'], @$_POST['strict'], @$_POST['custom_fields']);
 
 # all good
-$Result->show("success", _("Subnet splitted ok")."!", true);
-
-?>
+$Result->show("success", _("Subnet splitted successfully")."!", true);

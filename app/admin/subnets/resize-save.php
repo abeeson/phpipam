@@ -19,9 +19,11 @@ $Result 	= new Result ();
 
 # verify that user is logged in
 $User->check_user_session();
+# check maintaneance mode
+$User->check_maintaneance_mode ();
 
 # validate csrf cookie
-$_POST['csrf_cookie']==$_SESSION['csrf_cookie'] ? :                   $Result->show("danger", _("Invalid CSRF cookie"), true);
+$User->csrf_cookie ("validate", "resize", $_POST['csrf_cookie']) === false ? $Result->show("danger", _("Invalid CSRF cookie"), true) : "";
 
 # ID must be numeric
 if(!is_numeric($_POST['subnetId']))									{ $Result->show("danger", _("Invalid ID"), true); }

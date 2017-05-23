@@ -19,9 +19,20 @@ $Result 	= new Result ();
 
 # verify that user is logged in
 $User->check_user_session();
+# check maintaneance mode
+$User->check_maintaneance_mode ();
+
+# strip input tags
+$_POST = $Admin->strip_input_tags($_POST);
 
 # validate csrf cookie
-$_POST['csrf_cookie']==$_SESSION['csrf_cookie'] ? :                      $Result->show("danger", _("Invalid CSRF cookie"), true);
+# validate csrf cookie
+if($_POST['action']=="add") {
+	$User->csrf_cookie ("validate", "folder_add", $_POST['csrf_cookie']) === false ? $Result->show("danger", _("Invalid CSRF cookie"), true) : "";
+}
+else {
+	$User->csrf_cookie ("validate", "folder_".$_POST['subnetId'], $_POST['csrf_cookie']) === false ? $Result->show("danger", _("Invalid CSRF cookie"), true) : "";
+}
 
 # ID must be numeric
 if($_POST['action']=="add") {
@@ -32,11 +43,11 @@ if($_POST['action']=="add") {
 
 # verify that user has permissions to add subnet
 if($_POST['action']=="add") {
-	if($Sections->check_permission ($User->user, $_POST['sectionId']) != 3) { $Result->show("danger", _('You do not have permissions to add new subnet in this section')."!", true, true); }
+	if($Sections->check_permission ($User->user, $_POST['sectionId']) != 3) { $Result->show("danger", _('You do not have permissions to add new subnet in this section')."!", true); }
 }
 # otherwise check subnet permission
 else {
-	if($Subnets->check_permission ($User->user, $_POST['subnetId']) != 3) 	{ $Result->show("danger", _('You do not have permissions to add edit/delete this subnet')."!", true, true); }
+	if($Subnets->check_permission ($User->user, $_POST['subnetId']) != 3) 	{ $Result->show("danger", _('You do not have permissions to add edit/delete this subnet')."!", true); }
 }
 
 # we need old values for mailing
@@ -62,7 +73,6 @@ if(sizeof($custom) > 0) {
 unset ($_POST['subnet'],$_POST['allowRequests'],$_POST['showName'],$_POST['pingSubnet'],$_POST['discoverSubnet']);
 unset ($subnet_old_details['subnet'],$subnet_old_details['allowRequests'],$subnet_old_details['showName'],$subnet_old_details['pingSubnet'],$subnet_old_details['discoverSubnet']);
 
-
 # Set permissions if adding new subnet
 if($_POST['action']=="add") {
 	# root
@@ -76,11 +86,17 @@ if($_POST['action']=="add") {
 		$_POST['permissions'] = $parent->permissions;
 	}
 }
+elseif ($_POST['action']=="edit") {
+    /* for nesting - MasterId cannot be the same as subnetId! */
+    if ( $_POST['masterSubnetId']==$_POST['subnetId'] ) {
+    	$Result->show("danger", _('Folder cannot nest behind itself!'), true);
+    }
+}
 
 //check for name length - 2 is minimum!
 if(strlen($_POST['description'])<2 && $_POST['action']!="delete") { $Result->show("danger", _('Folder name must have at least 2 characters')."!", true); }
 //custom fields
-if(sizeof($custom) > 0) {
+if(sizeof($custom) > 0 && $_POST['action']!="delete") {
 	foreach($custom as $myField) {
 		//booleans can be only 0 and 1!
 		if($myField['type']=="tinyint(1)") {
@@ -130,20 +146,22 @@ if ($_POST['action']=="delete" && !isset($_POST['deleteconfirm'])) {
 else {
 
 	# create array of default update values
-	$values = array("id"=>@$_POST['subnetId'],
-					"isFolder"=>1,
-					"masterSubnetId"=>$_POST['masterSubnetId'],
-					"description"=>@$_POST['description'],
+	$values = array(
+					"id"             => @$_POST['subnetId'],
+					"isFolder"       => 1,
+					"masterSubnetId" => $_POST['masterSubnetId'],
+					"description"    => @$_POST['description'],
+					"isFull"         => @$_POST['isFull']
 					);
 	# for new subnets we add permissions
 	if($_POST['action']=="add") {
-		$values['permissions']=$_POST['permissions'];
-		$values['sectionId']=$_POST['sectionId'];
+		$values['permissions'] = $_POST['permissions'];
+		$values['sectionId']   = $_POST['sectionId'];
 	}
 	else {
 		# if section change
 		if(@$_POST['sectionId'] != @$_POST['sectionIdNew']) {
-			$values['sectionId']=$_POST['sectionIdNew'];
+			$values['sectionId'] = $_POST['sectionIdNew'];
 		}
 	}
 	# append custom fields
@@ -162,7 +180,9 @@ else {
 				}
 			}
 			//not null!
-			if($myField['Null']=="NO" && strlen($_POST[$myField['name']])==0) { $Result->show("danger", $myField['name'].'" can not be empty!', true); }
+			if ($_POST['action']!="delete") {
+    			if($myField['Null']=="NO" && strlen($_POST[$myField['name']])==0) { $Result->show("danger", $myField['name'].'" can not be empty!', true); }
+            }
 
 			# save to update array
 			$values[$myField['name']] = $_POST[$myField['name']];
@@ -173,16 +193,30 @@ else {
 	if(!$Subnets->modify_subnet ($_POST['action'], $values))	{ $Result->show("danger", _('Error editing folder'), true); }
 	else {
 		# update also all slave subnets!
-		if(isset($values['sectionId'])&&$_POST['action']!="add") {
+		if(isset($values['sectionId']) && $_POST['action']=="edit") {
 			$Subnets->reset_subnet_slaves_recursive();
 			$Subnets->fetch_subnet_slaves_recursive($_POST['subnetId']);
 			$Subnets->remove_subnet_slaves_master($_POST['subnetId']);
+
 			if(sizeof($Subnets->slaves)>0) {
 				foreach($Subnets->slaves as $slaveId) {
-					$Admin->object_modify ("subnets", "edit", "id", array("id"=>$slaveId, "sectionId"=>$_POST['sectionIdNew']));
+					$Admin->object_modify ("subnets", "edit", "id", array("id"=>$slaveId, "sectionId"=>$values['sectionId']));
 				}
 			}
 		}
+		# delete
+		elseif ($_POST['action']=="delete") {
+			$Subnets->reset_subnet_slaves_recursive();
+			$Subnets->fetch_subnet_slaves_recursive($_POST['subnetId']);
+			$Subnets->remove_subnet_slaves_master($_POST['subnetId']);
+
+			if(sizeof($Subnets->slaves)>0) {
+				foreach($Subnets->slaves as $slaveId) {
+					$Admin->object_modify ("subnets", "delete", "id", array("id"=>$slaveId));
+				}
+			}
+		}
+
 		# edit success
 		if($_POST['action']=="delete")	{ $Result->show("success", _('Folder, IP addresses and all belonging subnets deleted successfully').'!', false); }
 		else							{ $Result->show("success", _("Folder $_POST[action] successfull").'!', true); }

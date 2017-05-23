@@ -18,7 +18,13 @@ $Result 	= new Result ();
 $User->check_user_session();
 
 # create csrf token
-$csrf = $User->create_csrf_cookie ();
+$csrf = $User->csrf_cookie ("create", "widget");
+
+# strip tags - XSS
+$_POST = $User->strip_input_tags ($_POST);
+
+# validate action
+$Admin->validate_action ($_POST['action'], true);
 
 # fetch widget
 if($_POST['action']!="add") {
@@ -59,6 +65,12 @@ if($_POST['action']!="add") {
 	<tr>
 	    <td><?php print _('File'); ?></td>
 	    <td><input class="form-control input-sm input-w-250" type="text" name="wfile" value="<?php print @$w['wfile']; ?>.php" <?php if($_POST['action'] == "delete") print "readonly"; ?>></td>
+    </tr>
+
+	<!-- params -->
+	<tr>
+	    <td><?php print _('Parameters'); ?></td>
+	    <td><input class="form-control input-sm input-w-250" type="text" name="wparams" value="<?php print @$w['wparams']; ?>" <?php if($_POST['action'] == "delete") print "readonly"; ?>></td>
     </tr>
 
 	<!-- Admin -->

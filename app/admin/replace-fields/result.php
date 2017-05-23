@@ -15,10 +15,14 @@ $Result 	= new Result ();
 
 # verify that user is logged in
 $User->check_user_session();
+# check maintaneance mode
+$User->check_maintaneance_mode ();
 
 # validate csrf cookie
-$_POST['csrf_cookie']==$_SESSION['csrf_cookie'] ? :                      $Result->show("danger", _("Invalid CSRF cookie"), true);
+$User->csrf_cookie ("validate", "replace_fields", $_POST['csrf_cookie']) === false ? $Result->show("danger", _("Invalid CSRF cookie"), true) : "";
 
+# strip tags - XSS
+$_POST = $User->strip_input_tags ($_POST);
 
 //verify post
 if(empty($_POST['search'])) { $Result->show("danger", _('Please enter something in search field').'!', true); }

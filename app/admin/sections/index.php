@@ -42,8 +42,9 @@ if ($sections !== false) {
 
 <!-- show sections -->
 <?php if($sections!==false) { ?>
-<table id="manageSection" class="table table-striped table-condensed table-top">
+<table class="table sorted table-striped table-condensed table-top">
 <!-- headers -->
+<thead>
 <tr>
     <th><?php print _('Name'); ?></th>
     <th><?php print _('Description'); ?></th>
@@ -51,10 +52,13 @@ if ($sections !== false) {
     <th><?php print _('Strict mode'); ?></th>
     <th><?php print _('Show VLANs'); ?></th>
     <th><?php print _('Show VRFs'); ?></th>
+    <th><?php print _('Show only supernets'); ?></th>
     <th><?php print _('Group Permissions'); ?></th>
     <th></th>
 </tr>
+</thead>
 
+<tbody>
 <!-- existing sections -->
 <?php
 if(isset($sections_sorted)) {
@@ -75,16 +79,20 @@ if(isset($sections_sorted)) {
 		    print "	<td>/</td>";
 	    }
 	    //strictMode
-	    $mode = $section['strictMode']==0 ? _("No") : _("Yes");
-	    print '	<td>'. $mode .'</td>'. "\n";
+	    $mode = $section['strictMode']==0 ? "<span class='badge badge1 badge5 alert-danger'>"._("No") : "<span class='badge badge1 badge5 alert-success'>"._("Yes");
+	    print '	<td>'. $mode .'</span></td>'. "\n";
 	    //Show VLANs
 	    print " <td>";
-	    print @$section['showVLAN']==1 ? _("Yes") : _("No");
-	    print "	</td>";
+	    print @$section['showVLAN']==1 ? "<span class='badge badge1 badge5 alert-success'>"._("Yes") : "<span class='badge badge1 badge5 alert-danger'>"._("No");
+	    print "	</span></td>";
 	    //Show VRFs
 	    print " <td>";
-	    print @$section['showVRF']==1 ? _("Yes") : _("No");
-	    print "	</td>";
+	    print @$section['showVRF']==1 ? "<span class='badge badge1 badge5 alert-success'>"._("Yes") : "<span class='badge badge1 badge5 alert-danger'>"._("No");
+	    print "	</span></td>";
+	    //Show only supernets
+	    print " <td>";
+	    print @$section['showSupernetOnly']==1 ? "<span class='badge badge1 badge5 alert-success'>"._("Yes") : "<span class='badge badge1 badge5 alert-danger'>"._("No");
+	    print "	</span></td>";
 		//permissions
 		print "<td>";
 	    if(strlen($section['permissions'])>1 && !is_null($section['permissions'])) {
@@ -120,7 +128,7 @@ if(isset($sections_sorted)) {
 	}
 }
 ?>
-
+</tbody>
 </table>	<!-- end table -->
 
 <!-- show no configured -->

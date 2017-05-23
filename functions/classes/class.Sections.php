@@ -6,25 +6,67 @@
 
 class Sections extends Common_functions {
 
-	/* public variables */
-	public $sections;						//(array of objects) to store sections, section ID is array index
-	public $lastInsertId = null;			//id of last insert
+	/**
+	 * (array of objects) to store sections, section ID is array index
+	 *
+	 * @var mixed
+	 * @access public
+	 */
+	public $sections;
 
-	/* protected variables */
-	protected $user = null;					//(object) for User profile
+	/**
+	 * id of last insert
+	 *
+	 * (default value: null)
+	 *
+	 * @var mixed
+	 * @access public
+	 */
+	public $lastInsertId = null;
 
-	/* object holders */
-	public $Result;							//for Result printing
-	protected $Database;					//for Database connection
-	public $Log;							//for Logging connection
+	/**
+	 * (object) for User profile
+	 *
+	 * (default value: null)
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
+	protected $user = null;
+
+	/**
+	 * Result
+	 *
+	 * @var mixed
+	 * @access public
+	 */
+	public $Result;
+
+	/**
+	 * Database
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
+	protected $Database;
+
+	/**
+	 * Log
+	 *
+	 * @var mixed
+	 * @access public
+	 */
+	public $Log;
+
 
 
 
 
 	/**
-	 * __construct function
+	 * __construct function.
 	 *
 	 * @access public
+	 * @param Database_PDO $database
 	 */
 	public function __construct (Database_PDO $database) {
 		# Save database object
@@ -55,7 +97,7 @@ class Sections extends Common_functions {
 	 * @access public
 	 * @param mixed $action
 	 * @param mixed $values
-	 * @return void
+	 * @return bool
 	 */
 	public function modify_section ($action, $values) {
 		# strip tags
@@ -74,14 +116,14 @@ class Sections extends Common_functions {
 	 *
 	 * @access private
 	 * @param mixed $values
-	 * @return void
+	 * @return bool
 	 */
 	private function section_add ($values) {
 		# null empty values
 		$values = $this->reformat_empty_array_fields ($values, null);
 
-		# unset possible delegates permissions and id
-		unset($values['delegate'], $values['id']);
+		# unset id
+		unset($values['id']);
 
 		# execute
 		try { $this->Database->insertObject("sections", $values); }
@@ -106,7 +148,7 @@ class Sections extends Common_functions {
 	 *
 	 * @access private
 	 * @param mixed $values
-	 * @return void
+	 * @return bool
 	 */
 	private function section_edit ($values) {
 		# null empty values
@@ -114,12 +156,6 @@ class Sections extends Common_functions {
 
 		# save old values
 		$old_section = $this->fetch_section ("id", $values['id']);
-
-		# set delegations
-		if(@$values['delegate']==1)	{ $delegate = true; }
-
-		# unset possible delegates permissions and id
-		unset($values['delegate']);
 
 		# execute
 		try { $this->Database->updateObject("sections", $values, "id"); }
@@ -129,10 +165,6 @@ class Sections extends Common_functions {
 			return false;
 		}
 
-		# delegate permissions if requested
-        if(@$delegate) {
-	        if(!$this->delegate_section_permissions ($values['id'], $values['permissions']))	{ $this->Result->show("danger", _("Failed to delegate permissions"), false); }
-        }
 		# write changelog
 		$this->Log->write_changelog('section', "edit", 'success', $old_section, $values);
 		# ok
@@ -145,7 +177,7 @@ class Sections extends Common_functions {
 	 *
 	 * @access private
 	 * @param mixed $values
-	 * @return void
+	 * @return bool
 	 */
 	private function section_delete ($values) {
 		# subnets class
@@ -187,7 +219,7 @@ class Sections extends Common_functions {
 	 *
 	 * @access private
 	 * @param mixed $order
-	 * @return void
+	 * @return bool
 	 */
 	private function section_reorder ($order) {
 		# update each section
@@ -222,23 +254,10 @@ class Sections extends Common_functions {
 	 * @access public
 	 * @param string $order_by (default: "order")
 	 * @param bool $sort_asc (default: true)
-	 * @return void
+	 * @return array|bool
 	 */
 	public function fetch_all_sections ($order_by="order", $sort_asc=true) {
-		# fetch all
-		try { $sections = $this->Database->getObjects("sections", $order_by, $sort_asc); }
-		catch (Exception $e) {
-			$this->Result->show("danger", _("Error: ").$e->getMessage());
-			return false;
-		}
-		# save them to array
-		if(sizeof($sections)>0)	{
-			foreach($sections as $s) {
-				$this->sections[$s->id] = $s;
-			}
-		}
-		# response
-		return sizeof($sections)>0 ? $sections : false;
+    	return $this->fetch_all_objects ("sections", $order_by, $sort_asc);
 	}
 
 	/**
@@ -246,10 +265,10 @@ class Sections extends Common_functions {
 	 *
 	 * @param string $order_by (default: "order")
 	 * @param bool $sort_asc (default: true)
-	 * @return void
+	 * @return array|bool
 	 */
 	public function fetch_sections ($order_by="order", $sort_asc=true) {
-		return $this->fetch_all_sections ();
+		return $this->fetch_all_objects ("sections", $order_by, $sort_asc);
 	}
 
 	/**
@@ -257,38 +276,23 @@ class Sections extends Common_functions {
 	 *
 	 * @access public
 	 * @param string $method (default: "id")
-	 * @param mixed $id
-	 * @return void
+	 * @param mixed $value
+	 * @return object|bool
 	 */
-	public function fetch_section ($method, $id) {
-		# null method
-		$method = is_null($method) ? "id" : $this->Database->escape($method);
-		# check cache first
-		if(isset($this->sections[$id]))	{
-			return $this->sections[$id];
-		}
-		else {
-			try { $section = $this->Database->getObjectQuery("SELECT * FROM `sections` where `$method` = ?;", array($id)); }
-			catch (Exception $e) {
-				$this->Result->show("danger", _("Error: ").$e->getMessage());
-				return false;
-			}
-			# save to sections
-			$this->sections[$id] = $section;
-			#result
-			return $section;
-		}
+	public function fetch_section ($method = "id", $value) {
+    	if (is_null($method))   $method = "id";
+        return $this->fetch_object ("sections", $method, $value);
 	}
 
 	/**
 	 * Fetch subsections for specified sectionid
 	 *
 	 * @access public
-	 * @param mixed $sectionid
-	 * @return void
+	 * @param mixed $sectionId
+	 * @return array
 	 */
-	public function fetch_subsections ($sectionid) {
-		try { $subsections = $this->Database->getObjectsQuery("SELECT * FROM `sections` where `masterSection` = ?;", array($sectionid)); }
+	public function fetch_subsections ($sectionId) {
+		try { $subsections = $this->Database->getObjectsQuery("SELECT * FROM `sections` where `masterSection` = ?;", array($sectionId)); }
 		catch (Exception $e) {
 			$this->Result->show("danger", _("Error: ").$e->getMessage());
 			return false;
@@ -302,7 +306,7 @@ class Sections extends Common_functions {
 	 *
 	 * @access private
 	 * @param int $id
-	 * @return void
+	 * @return array
 	 */
 	private function get_all_section_and_subsection_ids ($id) {
 		# check for subsections and store all ids
@@ -324,7 +328,7 @@ class Sections extends Common_functions {
 	 *
 	 * @access public
 	 * @param mixed $sectionId
-	 * @return void
+	 * @return array|bool
 	 */
 	public function fetch_section_vlans ($sectionId) {
 		# set query
@@ -344,7 +348,7 @@ class Sections extends Common_functions {
 	 *
 	 * @access public
 	 * @param mixed $sectionId
-	 * @return void
+	 * @return array|bool
 	 */
 	public function fetch_section_vrfs ($sectionId) {
 		# set query
@@ -365,13 +369,14 @@ class Sections extends Common_functions {
 	 *
 	 * @access public
 	 * @param mixed $sectionId
-	 * @return void
+	 * @return array
 	 */
 	public function fetch_section_domains ($sectionId) {
 		# first fetch all domains
 		$Admin = new Admin ($this->Database, false);
 		$domains = $Admin->fetch_all_objects ("vlanDomains");
 		# loop and check
+		$permitted = array();
 		foreach($domains as $d) {
 			//default
 			if($d->id==1) {
@@ -393,7 +398,7 @@ class Sections extends Common_functions {
 	 *
 	 * @access public
 	 * @param mixed $sectionId
-	 * @return void
+	 * @return array|bool
 	 */
 	public function fetch_section_nameserver_sets ($sectionId) {
 		# first fetch all nameserver sets
@@ -401,6 +406,7 @@ class Sections extends Common_functions {
 		$nameservers = $Admin->fetch_all_objects ("nameservers");
 		# loop and check
 		if ($nameservers!==false) {
+    		$permitted = array();
 			foreach($nameservers as $n) {
 				//default
 				if($n->id==1) {
@@ -435,7 +441,7 @@ class Sections extends Common_functions {
 	 *
 	 * @access public
 	 * @param mixed $permissions
-	 * @return void
+	 * @return array
 	 */
 	public function parse_section_permissions($permissions) {
 		# save to array
@@ -463,7 +469,7 @@ class Sections extends Common_functions {
 	 * @access public
 	 * @param obj $user
 	 * @param int $sectionid
-	 * @return void
+	 * @return int
 	 */
 	public function check_permission ($user, $sectionid) {
 		# decode groups user belongs to
@@ -531,6 +537,9 @@ class Sections extends Common_functions {
     			}
     		}
 		}
+		else {
+    		$out = array();
+		}
 		# return
 		return $out;
 	}
@@ -538,12 +547,49 @@ class Sections extends Common_functions {
 	/**
 	 * Delegates section permissions to all belonging subnets
 	 *
-	 * @access private
+	 * @access public
 	 * @param mixed $sectionId
-	 * @param mixed $permissions
-	 * @return void
+	 * @param array $removed_permissions
+	 * @param array $changed_permissions
+	 * @return bool
 	 */
-	private function delegate_section_permissions ($sectionId, $permissions) {
+	public function delegate_section_permissions ($sectionId, $removed_permissions, $changed_permissions) {
+    	// init subnets class
+    	$Subnets = new Subnets ($this->Database);
+    	// fetch section subnets
+    	$section_subnets = $this->fetch_multiple_objects ("subnets", "sectionId", $sectionId);
+    	// loop
+    	if ($section_subnets!==false) {
+        	foreach ($section_subnets as $s) {
+                // to array
+                $s_old_perm = json_decode($s->permissions, true);
+                // removed
+                if (sizeof($removed_permissions)>0) {
+                    foreach ($removed_permissions as $k=>$p) {
+                        unset($s_old_perm[$k]);
+                    }
+                }
+                // added
+                if (sizeof($changed_permissions)>0) {
+                    foreach ($changed_permissions as $k=>$p) {
+                        $s_old_perm[$k] = $p;
+                    }
+                }
+
+                // set values
+                $values = array(
+                            "id" => $s->id,
+                            "permissions" => json_encode($s_old_perm)
+                            );
+
+                // update
+                if($Subnets->modify_subnet ("edit", $values)===false)       { $Result->show("danger",  _("Failed to set subnet permissons for subnet")." $s->name!", true); }
+        	}
+        	// ok
+        	$this->Result->show("success", _("Subnet permissions recursively set")."!", true);
+    	}
+
+
 		try { $this->Database->updateObject("subnets", array("permissions"=>$permissions, "sectionId"=>$sectionId), "sectionId"); }
 		catch (Exception $e) {
 			$this->Result->show("danger", _("Error: ").$e->getMessage());

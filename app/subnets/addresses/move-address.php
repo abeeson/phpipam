@@ -20,9 +20,11 @@ $Addresses	= new Addresses ($Database);
 
 # verify that user is logged in
 $User->check_user_session();
+# check maintaneance mode
+$User->check_maintaneance_mode ();
 
 # create csrf token
-$csrf = $User->create_csrf_cookie ();
+$csrf = $User->csrf_cookie ("create", "address");
 
 # validate action
 $Tools->validate_action ($_POST['action']);

@@ -16,6 +16,8 @@ $Tools	    = new Tools ($Database);
 
 # verify that user is logged in
 $User->check_user_session();
+# check maintaneance mode
+$User->check_maintaneance_mode ();
 
 # set and check permissions
 $subnet_permission = $Subnets->check_permission($User->user, $_POST['subnetId']);
@@ -37,6 +39,10 @@ print '<form id="selectExportFields">';
 
 # table
 print "	<table class='table table-striped table-condensed'>";
+
+print "	<tr>";
+print "	<td colspan='2'><h4>"._('Standard fields')."</h4></td>";
+print "	</tr>";
 
 # IP addr - mandatory
 print "	<tr>";
@@ -98,10 +104,20 @@ print "	<td>"._('Note')."</td>";
 print "	<td><input type='checkbox' name='note' checked> </td>";
 print "	</tr>";
 
+# note
+print "	<tr>";
+print "	<td>"._('Location')."</td>";
+print "	<td><input type='checkbox' name='location' checked> </td>";
+print "	</tr>";
 
 # get all custom fields
 $custom_fields = $Tools->fetch_custom_fields ('ipaddresses');
 if(sizeof($custom_fields) > 0) {
+
+	print "	<tr>";
+	print "	<td colspan='2'><h4>"._('Custom fields')."</h4></td>";
+	print "	</tr>";
+
 	foreach($custom_fields as $myField) {
 
 		//change spaces to ___
@@ -113,6 +129,12 @@ if(sizeof($custom_fields) > 0) {
 		print "	</tr>";
 	}
 }
+
+# set file name
+print "	<tr>";
+print "	<td style='width:140px;'>"._('Filename')."</td>";
+print "	<td><input type='text' class='form-control' name='filename' value='phpipam_subnet_export.xls' style='height:auto;'></td>";
+print "	</tr>";
 
 print '</table>';
 print '</form>';

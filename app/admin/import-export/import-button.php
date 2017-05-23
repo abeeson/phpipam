@@ -32,9 +32,9 @@ $User->check_user_session();
 </form>
 
 <!-- jQuery File Upload Dependencies -->
-<script src="js/1.2/uploader/jquery.ui.widget.js"></script>
-<script src="js/1.2/uploader/jquery.iframe-transport.js"></script>
-<script src="js/1.2/uploader/jquery.fileupload.js"></script>
+<script src="js/<?php print SCRIPT_PREFIX; ?>/uploader/jquery.ui.widget.js"></script>
+<script src="js/<?php print SCRIPT_PREFIX; ?>/uploader/jquery.iframe-transport.js"></script>
+<script src="js/<?php print SCRIPT_PREFIX; ?>/uploader/jquery.fileupload.js"></script>
 
 <script type="text/javascript">
 $(function(){
@@ -89,10 +89,19 @@ $(function(){
 			$('#uploadResult').addClass('alert alert-danger');
 		},
 		success:function(e, data){
-			// All good, check for response!
-			var resp = jQuery.parseJSON(e);
-			//get status
-			var respStat = resp['status'];
+            // All good, check for response!
+            try {
+                var resp = jQuery.parseJSON(e);
+            } catch (e) {
+                // error
+            	$('ul.progressUl li.alert').addClass('alert alert-danger');		//add error class
+            	$('li.alert p').append("<br><strong>Error: Error parsing json response</strong>");
+
+                return;
+            }
+            //get status
+            var respStat = resp['status'];
+
 			//success
 			if(respStat == "success") {
 				$('#uploadResult').addClass('alert alert-success');		//add success class

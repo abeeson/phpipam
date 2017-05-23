@@ -8,7 +8,7 @@
 $User->check_user_session();
 
 # fetch all APIs
-$users = $Admin->fetch_all_objects("users");
+$users = $Admin->fetch_all_objects("users", "username");
 # fetch custom fields
 $custom = $Tools->fetch_custom_fields('users');
 
@@ -25,9 +25,10 @@ $ffields = is_array(@$ffields['users']) ? $ffields['users'] : array();
 <button class='btn btn-sm btn-default editUser' style="margin-bottom:10px;" data-action='add'><i class='fa fa-plus'></i> <?php print _('Create user'); ?></button>
 
 <!-- table -->
-<table id="userPrint" class="table table-striped table-top table-auto">
+<table id="userPrint1" class="table sorted table-striped table-top">
 
 <!-- Headers -->
+<thead>
 <tr>
 	<th></th>
     <th><?php print _('Real Name'); ?></th>
@@ -36,7 +37,13 @@ $ffields = is_array(@$ffields['users']) ? $ffields['users'] : array();
     <th><?php print _('Role'); ?></th>
     <th><?php print _('Language'); ?></th>
     <th><?php print _('Authentication'); ?></th>
+    <?php if ($User->settings->enablePowerDNS==1) { ?>
     <th><?php print _('PowerDNS'); ?></th>
+    <?php } ?>
+    <th><?php print _('Manage VLANs / VRFs'); ?></th>
+    <?php if ($User->settings->enablePSTN==1) { ?>
+    <th><?php print _('PSTN'); ?></th>
+    <?php } ?>
     <th><?php print _('Groups'); ?></th>
     <th><?php print _('Last login'); ?></th>
 	<?php
@@ -48,9 +55,11 @@ $ffields = is_array(@$ffields['users']) ? $ffields['users'] : array();
 		}
 	}
 	?>
-    <th></th>
+    <th class="actions"></th>
 </tr>
+</thead>
 
+<tbody>
 <?php
 /* print existing sections */
 foreach ($users as $user) {
@@ -59,8 +68,8 @@ foreach ($users as $user) {
 	print '<tr>' . "\n";
 
 	# set icon based on normal user or admin
-	if($user['role'] == "Administrator") 	{ print '	<td><img src="css/1.2/images/userVader.png" rel="tooltip" title="'._('Administrator').'"></td>'. "\n"; }
-	else 									{ print '	<td><img src="css/1.2/images/userTrooper.png" rel="tooltip" title="'. _($user['role']) .'"></td>'. "\n";	}
+	if($user['role'] == "Administrator") 	{ print '	<td><img src="css/'.SCRIPT_PREFIX.'/images/userVader.png" rel="tooltip" title="'._('Administrator').'"></td>'. "\n"; }
+	else 									{ print '	<td><img src="css/'.SCRIPT_PREFIX.'/images/userTrooper.png" rel="tooltip" title="'. _($user['role']) .'"></td>'. "\n";	}
 
 	print '	<td><a href="'.create_link("administration","users",$user['id']).'">' . $user['real_name'] . '</a></td>'. "\n";
 	print '	<td>' . $user['username']  . '</td>'. "\n";
@@ -86,9 +95,46 @@ foreach ($users as $user) {
 	print "</span></td>";
 
 	# powerDNS
-	print "<td>";
-	print $user['pdns'];
-	print "</td>";
+	if($user['role']=="Administrator") {
+    	if ($User->settings->enablePowerDNS==1) {
+     	print "<td><span class='badge badge1 badge5 alert-success'>"._("Yes")."</span></td>";
+     	}
+     	print "<td><span class='badge badge1 badge5 alert-success'>"._("Yes")."</span></td>";
+    	if ($User->settings->enablePSTN==1) {
+     	print "<td><span class='badge badge1 badge5 alert-success'>"._($Subnets->parse_permissions (3))."</span></td>";
+     	}
+	}
+	else {
+    	if ($User->settings->enablePowerDNS==1) {
+    	if(strlen($user['pdns'])==0) $user['pdns'] = "No";
+
+        // append badge
+    	$user['pdns'] = $user['pdns']=="No" ? "<span class='badge badge1 badge5 alert-danger'>"._($user['pdns'])."</span>" : "<span class='badge badge1 badge5 alert-success'>"._($user['pdns'])."</span>";
+
+    	print "<td>";
+    	print $user['pdns'];
+    	print "</td>";
+    	}
+
+    	if(strlen($user['editVlan'])==0) $user['editVlan'] = "No";
+
+        // append badge
+    	$user['editVlan'] = $user['editVlan']=="No" ? "<span class='badge badge1 badge5 alert-danger'>"._($user['editVlan'])."</span>" : "<span class='badge badge1 badge5 alert-success'>"._($user['editVlan'])."</span>";
+
+    	print "<td>";
+    	print $user['editVlan'];
+    	print "</td>";
+
+        // pstn
+    	if ($User->settings->enablePSTN==1) {
+         // append badge
+    	$user['pstn'] = $user['pstn']=="No" ? "<span class='badge badge1 badge5 alert-danger'>"._($user['pstn'])."</span>" : "<span class='badge badge1 badge5 alert-success'>"._($Subnets->parse_permissions ($user['pstn']))."</span>";
+
+    	print "<td>";
+    	print $user['pstn'];
+    	print "</td>";
+    	}
+	}
 
 	# groups
 	if($user['role'] == "Administrator") {
@@ -141,7 +187,7 @@ foreach ($users as $user) {
 
 	# edit, delete
 	print "	<td class='actions'>";
-	print "	<div class='btn-group'>";
+	print "	<div class='btn-group nowrap'>";
 	print "		<a class='btn btn-xs btn-default' href='".create_link("administration","users",$user['id'])."'><i class='fa fa-eye'></i></a></button>";
 	print "		<button class='btn btn-xs btn-default editUser' data-userid='$user[id]' data-action='edit'  ><i class='fa fa-pencil'></i></button>";
 	print "		<a class='btn btn-xs btn-default";
@@ -154,6 +200,7 @@ foreach ($users as $user) {
 	print '</tr>' . "\n";
 }
 ?>
+</tbody>
 </table>
 
 <div class="alert alert-info alert-absolute">

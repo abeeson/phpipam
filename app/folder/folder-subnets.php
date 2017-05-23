@@ -19,9 +19,6 @@ $folderId = $_GET['subnetId'];
 # get section details
 $section = $Sections->fetch_section ("id", $folder['sectionId']);
 
-# get all slaves
-$slaves = $Subnets->fetch_subnet_slaves ($folderId);
-
 if($slaves) {
 	# sort slaves by folder / subnet
 	foreach($slaves as $s) {
@@ -78,6 +75,8 @@ if($slaves) {
 		# headers
 		print "<tr>";
 		print "	<th class='small'>"._('VLAN')."</th>";
+		if($User->settings->enableVRF==1)
+		print "	<th class='small'>"._('VRF')."</th>";
 		print "	<th class='small description'>"._('Subnet description')."</th>";
 		print "	<th>"._('Subnet')."</th>";
 		print "	<th class='small hidden-xs hidden-sm'>"._('Used')."</th>";
@@ -101,21 +100,31 @@ if($slaves) {
 				# reformat empty VLAN
 				if(sizeof($vlan)==1) { $vlan['number'] = "/"; }
 
+				# get VRF details
+				if($User->settings->enableVRF==1) {
+					$vrf = $Tools->fetch_object("vrf", "vrfId", $slave['vrfId']);
+					$vrf = (array) $vrf;
+					# reformat empty VLAN
+					if(sizeof($vrf)==1) { $vrf['name'] = "/"; }
+				}
+
+				// calculate usage
+                $calculate  = $Subnets->calculate_subnet_usage ($slave, false);
+
 				# add full information
                 $fullinfo = $slave['isFull']==1 ? " <span class='badge badge1 badge2 badge4'>"._("Full")."</span>" : "";
+                if ($slave['isFull']!==1) {
+                    # if usage is 100%, fake usFull to true!
+                    if ($calculate['freehosts']==0)  { $fullinfo = "<span class='badge badge1 badge2 badge4'>"._("Full")."</span>"; }
+                }
 
 				print "<tr>";
 			    print "	<td class='small'>".$vlan['number']."</td>";
-			    print "	<td class='small description'><a href='".create_link("subnets",$section->id,$slave['id'])."'>$slave[description]</a></td>";
-			    print "	<td><a href='".create_link("subnets",$section->id,$slave['id'])."'>$slave[ip]/$slave[mask] $fullinfo</a></td>";
+			    if($User->settings->enableVRF==1)
+			    print "	<td class='small'>".$vrf['name']."</td>";
 
-				# calculate free / used / percentage
-				if(!$Subnets->has_slaves ($slave['id']))	{ 
-					$ipCount = $Addresses->count_subnet_addresses ($slave['id']); 
-					$calculate = $Subnets->calculate_subnet_usage ( (int) $ipCount, $slave['mask'], $slave['subnet'], $slave['isFull'] );
-				} else {
-					$calculate = $Subnets->calculate_subnet_usage_recursive( $slave['id'], $slave['subnet'], $slave['mask'], $Addresses, $slave['isFull']);
-				}
+			    print "	<td class='small description'><a href='".create_link("subnets",$section->id,$slave['id'])."'>$slave[description]</a></td>";
+			    print "	<td><a href='".create_link("subnets",$section->id,$slave['id'])."'>".$Subnets->transform_address($slave['subnet'], "dotted")."/$slave[mask] $fullinfo</a></td>";
 
 				# print usage
 			    print ' <td class="small hidden-xs hidden-sm">'. $calculate['used'] .'/'. $calculate['maxhosts'] .'</td>'. "\n";

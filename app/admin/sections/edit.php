@@ -18,7 +18,13 @@ $Result 	= new Result ();
 $User->check_user_session();
 
 # create csrf token
-$csrf = $User->create_csrf_cookie ();
+$csrf = $User->csrf_cookie ("create", "section");
+
+# strip tags - XSS
+$_POST = $User->strip_input_tags ($_POST);
+
+# validate action
+$Admin->validate_action ($_POST['action'], true);
 
 # fetch all sections for master section
 $sections = $Sections->fetch_all_sections ();
@@ -117,6 +123,18 @@ $section  = (array) $Sections->fetch_section (null, @$_POST['sectionId']);
 			</td>
 		</tr>
 
+		<!-- Show only supernets -->
+		<tr>
+			<td><?php print _('Show only supernets'); ?></td>
+			<td colspan="2">
+				<select name="showSupernetOnly" class="input-small form-control input-sm input-w-auto  pull-left" <?php if($_POST['action']=="delete") print 'disabled="disabled"'; ?>>
+					<option value="1"><?php print _('Yes'); ?></option>
+					<option value="0" <?php if(@$section['showSupernetOnly'] == "0") print "selected='selected'"; ?>><?php print _('No'); ?></option>
+				</select>
+				<span class="help-inline info2"><?php print _('Show only supernets in list of subnets in section'); ?></span>
+			</td>
+		</tr>
+
 		<!-- Subnet ordering -->
 		<tr>
 			<td class="title"><?php print _('Subnet ordering'); ?></td>
@@ -206,11 +224,16 @@ $section  = (array) $Sections->fetch_section (null, @$_POST['sectionId']);
 			<td><?php print _('Delegate'); ?></td>
 			<td colspan="2">
 			<div class="checkbox">
-				<input type="checkbox" name="delegate" value="1">
-				<span class="info2 help-inline"><?php print _('Check to delegate permissions to all subnets in section'); ?></span>
+				<input type="checkbox" name="delegate" class="input-switch" value="1" checked="checked">
 			</div>
 			</td>
 		</tr>
+        <tr class="warning2">
+            <td></td>
+            <td colspan="2">
+            <?php $Result->show("info", _('Permission changes will be propagated to all nested subnets')."!", false); ?>
+            </td>
+        </tr>
 		<?php } ?>
 
 		</table>	<!-- end table -->
@@ -234,3 +257,27 @@ $section  = (array) $Sections->fetch_section (null, @$_POST['sectionId']);
 	<!-- result holder -->
 	<div class="sectionEditResult"></div>
 </div>
+
+
+<script type="text/javascript">
+$(document).ready(function() {
+/* bootstrap switch */
+var switch_options = {
+	onText: "Yes",
+	offText: "No",
+    onColor: 'default',
+    offColor: 'default',
+    size: "mini"
+};
+
+$(".input-switch").bootstrapSwitch(switch_options);
+
+$('.input-switch').on('switchChange.bootstrapSwitch', function (e, data) {
+	// get state from both
+	var state = ($(".input-switch").bootstrapSwitch('state'));
+	// change
+	if (state==true)	{ $("tr.warning2").removeClass("hidden"); }
+	else            	{ $("tr.warning2").addClass("hidden"); }
+});
+});
+</script>

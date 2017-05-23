@@ -19,14 +19,14 @@ $Result 	= new Result ();
 $User->check_user_session();
 
 # create csrf token
-$csrf = $User->create_csrf_cookie ();
+$csrf = $User->csrf_cookie ("create", "permissions");
 
 
 # ID must be numeric
 if(!is_numeric($_POST['subnetId']))	{ $Result->show("danger", _("Invalid ID"), true, true); }
 
 # get all groups
-$groups = $Admin->fetch_all_objects ("userGroups", "g_id");
+$groups = $Admin->fetch_all_objects ("userGroups", "g_name");
 # get subnet details
 $subnet = $Subnets->fetch_subnet(null, $_POST['subnetId']);
 ?>
@@ -119,12 +119,12 @@ $('.input-switch').on('switchChange.bootstrapSwitch', function (e, data) {
     <tr>
         <td><?php print _('Propagate changes'); ?></td>
         <td>
-            <input type="checkbox" name="set_inheritance" class="input-switch" value="Yes" checked="checked">
+            <input type="checkbox" style="margin-left: 0px; padding-left: 0px;" name="set_inheritance" class="input-switch" value="Yes" checked="checked">
         </td>
     </tr>
     <tr class="warning2">
         <td colspan="2">
-        <?php $Result->show("info", _('Permissions for all nested subnets will be overridden')."!", false); ?>
+        <?php $Result->show("info", _('Permission changes will be propagated to all nested subnets')."!", false); ?>
         </td>
     </tr>
     <tr>

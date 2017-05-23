@@ -11,6 +11,7 @@ require( dirname(__FILE__) . '/../../../functions/functions.php');
 $Database 	= new Database_PDO;
 $User 		= new User ($Database);
 $Admin	 	= new Admin ($Database);
+$Subnets	= new Subnets ($Database);
 $Tools	 	= new Tools ($Database);
 $Result 	= new Result ();
 
@@ -18,8 +19,13 @@ $Result 	= new Result ();
 $User->check_user_session();
 
 # create csrf token
-$csrf = $User->create_csrf_cookie ();
+$csrf = $User->csrf_cookie ("create", "user");
 
+# strip tags - XSS
+$_POST = $User->strip_input_tags ($_POST);
+
+# validate action
+$Admin->validate_action ($_POST['action'], true);
 
 # fetch custom fields
 $custom 	= $Tools->fetch_custom_fields('users');
@@ -203,7 +209,7 @@ $(document).ready(function(){
 	</tbody>
 
 	<!-- mailNotify -->
-	<tbody id="user_notifications" <?php if(@$user['role']!="Administrator") print "style='display:none'"; ?>>
+	<tbody id="user_notifications">
 	<tr>
     	<td><?php print _('Mail State changes'); ?></td>
     	<td>
@@ -267,18 +273,44 @@ $(document).ready(function(){
 		<td class="info2"><?php print _('Select to which groups the user belongs to'); ?></td>
 	</tr>
 
-	<!-- pdns -->
-    <?php if ($User->settings->enablePowerDNS==1) { ?>
-	<tbody>
+	<!-- vlans -->
 	<tr>
 		<td colspan="3"><hr></td>
 	</tr>
 	<tr>
+    	<td><?php print _("VLANs / VRFs"); ?></td>
+    	<td>
+            <input type="checkbox" class="input-switch" value="Yes" name="editVlan" <?php if($user['editVlan'] == "Yes") print 'checked'; ?>>
+    	</td>
+		<td class="info2"><?php print _('Select to allow user to manage VLANs and VRFs'); ?></td>
+	</tr>
+
+	<!-- pdns -->
+    <?php if ($User->settings->enablePowerDNS==1) { ?>
+	<tr>
     	<td><?php print _("PowerDNS"); ?></td>
     	<td>
-            <input type="checkbox" class="input-switch" value="Yes" name="pdns" <?php if(@$user->pdns == "Yes") print 'checked'; ?>>
+            <input type="checkbox" class="input-switch" value="Yes" name="pdns" <?php if($user['pdns'] == "Yes") print 'checked'; ?>>
     	</td>
 		<td class="info2"><?php print _('Select to allow user to create DNS records'); ?></td>
+	</tr>
+    <?php } ?>
+
+	<!-- pstn -->
+    <?php if ($User->settings->enablePSTN==1) { ?>
+	<tr>
+    	<td><?php print _("PSTN");?></td>
+    	<td>
+        	<select class="form-control input-sm input-w-auto" name="pstn">
+            <?php
+            foreach (array(0,1,2,3) as $p) {
+                $selected = $p==$user['pstn'] ? "selected" : "";
+                print "<option value='$p' $selected>".$Subnets->parse_permissions ($p)."</option>";
+            }
+            ?>
+        	</select>
+    	</td>
+		<td class="info2"><?php print _('Select to allow user to manage PSTN numbers'); ?></td>
 	</tr>
     <?php } ?>
 
@@ -290,90 +322,19 @@ $(document).ready(function(){
 		print '</tr>';
 
 		# count datepickers
-		$timeP = 0;
+		$timepicker_index = 0;
 
 		# all my fields
 		foreach($custom as $field) {
-			# replace spaces with |
-			$field['nameNew'] = str_replace(" ", "___", $field['name']);
-
-			# required
-			if($field['Null']=="NO")	{ $required = "*"; }
-			else						{ $required = ""; }
-
-			# set default value !
-			if ($_POST['action']=="add")	{ $user[$field['name']] = $field['Default']; }
-
-			print '<tr>'. "\n";
-			print '	<td>'. $field['name'] .' '.$required.'</td>'. "\n";
-			print '	<td>'. "\n";
-
-			//set type
-			if(substr($field['type'], 0,3) == "set" || substr($field['type'], 0,4) == "enum") {
-				//parse values
-				$tmp = substr($field['type'], 0,3)=="set" ? explode(",", str_replace(array("set(", ")", "'"), "", $field['type'])) : explode(",", str_replace(array("enum(", ")", "'"), "", $field['type']));
-				//null
-				if($field['Null']!="NO") { array_unshift($tmp, ""); }
-
-				print "<select name='$field[nameNew]' class='form-control input-sm input-w-auto' rel='tooltip' data-placement='right' title='$field[Comment]'>";
-				foreach($tmp as $v) {
-					if($v==$user[$field['name']])	{ print "<option value='$v' selected='selected'>$v</option>"; }
-					else								{ print "<option value='$v'>$v</option>"; }
-				}
-				print "</select>";
-			}
-			//date and time picker
-			elseif($field['type'] == "date" || $field['type'] == "datetime") {
-				// just for first
-				if($timeP==0) {
-					print '<link rel="stylesheet" type="text/css" href="css/1.2/bootstrap/bootstrap-datetimepicker.min.css">';
-					print '<script type="text/javascript" src="js/1.2/bootstrap-datetimepicker.min.js"></script>';
-					print '<script type="text/javascript">';
-					print '$(document).ready(function() {';
-					//date only
-					print '	$(".datepicker").datetimepicker( {pickDate: true, pickTime: false, pickSeconds: false });';
-					//date + time
-					print '	$(".datetimepicker").datetimepicker( { pickDate: true, pickTime: true } );';
-
-					print '})';
-					print '</script>';
-				}
-				$timeP++;
-
-				//set size
-				if($field['type'] == "date")	{ $size = 10; $class='datepicker';		$format = "yyyy-MM-dd"; }
-				else							{ $size = 19; $class='datetimepicker';	$format = "yyyy-MM-dd"; }
-
-				//field
-				if(!isset($user[$field['name']]))	{ print ' <input type="text" class="'.$class.' form-control input-sm input-w-auto" data-format="'.$format.'" name="'. $field['nameNew'] .'" maxlength="'.$size.'" rel="tooltip" data-placement="right" title="'.$field['Comment'].'">'. "\n"; }
-				else								{ print ' <input type="text" class="'.$class.' form-control input-sm input-w-auto" data-format="'.$format.'" name="'. $field['nameNew'] .'" maxlength="'.$size.'" value="'. $user[$field['name']]. '" rel="tooltip" data-placement="right" title="'.$field['Comment'].'">'. "\n"; }
-			}
-			//boolean
-			elseif($field['type'] == "tinyint(1)") {
-				print "<select name='$field[nameNew]' class='form-control input-sm input-w-auto' rel='tooltip' data-placement='right' title='$field[Comment]'>";
-				$tmp = array(0=>"No",1=>"Yes");
-				//null
-				if($field['Null']!="NO") { $tmp[2] = ""; }
-
-				foreach($tmp as $k=>$v) {
-					if(strlen($user[$field['name']])==0 && $k==2)	{ print "<option value='$k' selected='selected'>"._($v)."</option>"; }
-					elseif($k==$user[$field['name']])				{ print "<option value='$k' selected='selected'>"._($v)."</option>"; }
-					else											{ print "<option value='$k'>"._($v)."</option>"; }
-				}
-				print "</select>";
-			}
-			//text
-			elseif($field['type'] == "text") {
-				print ' <textarea class="form-control input-sm" name="'. $field['nameNew'] .'" placeholder="'. $field['name'] .'" rowspan=3>'. $user[$field['name']]. '</textarea>'. "\n";
-			}
-			//default - input field
-			else {
-				print ' <input type="text" class="ip_addr form-control input-sm" name="'. @$field['nameNew'] .'" placeholder="'. @$field['name'] .'" value="'. @$user[$field['name']]. '" size="30">'. "\n";
-			}
-
-			print "	<td class='info2'>".$field['Comment']."</td>";
-			print '	</td>'. "\n";
-			print '</tr>'. "\n";
+    		// create input > result is array (required, input(html), timepicker_index)
+    		$custom_input = $Tools->create_custom_field_input ($field, $user, $_POST['action'], $timepicker_index);
+    		// add datepicker index
+    		$timepicker_index = $timepicker_index + $custom_input['timepicker_index'];
+            // print
+			print "<tr>";
+			print "	<td>".ucwords($field['name'])." ".$custom_input['required']."</td>";
+			print "	<td>".$custom_input['field']."</td>";
+			print "</tr>";
 		}
 	}
 	?>

@@ -10,25 +10,37 @@ require( dirname(__FILE__) . '/../../../functions/functions.php');
 # initialize user object
 $Database 	= new Database_PDO;
 $User 		= new User ($Database);
-$Admin	 	= new Admin ($Database);
+$Admin	 	= new Admin ($Database, false);
 $Tools	 	= new Tools ($Database);
 $Result 	= new Result ();
 
 # verify that user is logged in
 $User->check_user_session();
+# check maintaneance mode
+$User->check_maintaneance_mode ();
+
+# make sue user can edit
+if ($User->is_admin(false)==false && $User->user->editVlan!="Yes") {
+    $Result->show("danger", _("Not allowed to change VLANs"), true, true);
+}
+
+# strip input tags
+$_POST = $Admin->strip_input_tags($_POST);
 
 # validate csrf cookie
-$_POST['csrf_cookie']==$_SESSION['csrf_cookie'] ? :                      $Result->show("danger", _("Invalid CSRF cookie"), true);
+$User->csrf_cookie ("validate", "vlan", $_POST['csrf_cookie']) === false ? $Result->show("danger", _("Invalid CSRF cookie"), true) : "";
 
 # fetch custom fields
 $custom = $Tools->fetch_custom_fields('vlans');
 
 //if it already exist die
-if($User->settings->vlanDuplicate==0 && $_POST['action']=="add") {
+if($User->settings->vlanDuplicate==0 && ($_POST['action']=="add" || $_POST['action']=="edit")) {
 	$check_vlan = $Admin->fetch_multiple_objects ("vlans", "domainId", $_POST['domainId'], "vlanId");
+	// check
 	if($check_vlan!==false) {
 		foreach($check_vlan as $v) {
-			if($v->number == $_POST['number']) {
+			if ($v->vlanId==$_POST['vlanId']) {}
+			elseif($v->number == $_POST['number']) {
 																			{ $Result->show("danger", _("VLAN already exists"), true); }
 			}
 		}
@@ -77,5 +89,3 @@ if($_POST['action']=="delete") { $Admin->remove_object_references ("subnets", "v
 
 # print value for on the fly
 if($_POST['action']=="add")	   { print '<p id="vlanidforonthefly"    style="display:none">'.$Admin->lastId.'</p>'; }
-
-?>

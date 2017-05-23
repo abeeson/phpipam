@@ -4,8 +4,11 @@
  * Discover new hosts with telnet scan
  *******************************/
 
+# verify that user is logged in
+$User->check_user_session();
+
 # get ports
-if(strlen($_POST['port'])==0) 	{ $Result->show("danger", _('Please enter ports to scan').'!', true); }
+if(strlen($_POST['port'])==0) 	  { $Result->show("danger", _('Please enter ports to scan').'!', true); }
 
 //verify ports
 $pcheck = explode(";", str_replace(",",";",$_POST['port']));
@@ -16,6 +19,11 @@ foreach($pcheck as $p) {
 }
 $_POST['port'] = str_replace(";",",",$_POST['port']);
 
+// verify subnetId
+if(!is_numeric($_POST['subnetId'])) { $Result->show("danger", _('Invalid subnet Identifier').'!', true); }
+
+# create csrf token
+$csrf = $User->csrf_cookie ("create", "scan");
 
 # invoke CLI with threading support
 $cmd = $Scan->php_exec." ".dirname(__FILE__) . "/../../../functions/scan/subnet-scan-telnet-execute.php $_POST[subnetId] '$_POST[port]'";
@@ -73,6 +81,7 @@ else {
 		//hostname
 		print "<td>";
 		print "	<input type='text' class='form-control input-sm' name='dns_name$m' value='".@$hostname['name']."'>";
+		print " <input type='hidden' name='csrf_cookie' value='$csrf'>";
 		print "</td>";
 		//remove button
 		print 	"<td><a href='' class='btn btn-xs btn-danger resultRemove' data-target='result$m'><i class='fa fa-times'></i></a></td>";

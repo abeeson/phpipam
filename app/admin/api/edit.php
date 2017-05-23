@@ -17,7 +17,10 @@ $Result 	= new Result ();
 $User->check_user_session();
 
 # create csrf token
-$csrf = $User->create_csrf_cookie ();
+$csrf = $User->csrf_cookie ("create", "apiedit");
+
+# validate action
+$Admin->validate_action ($_POST['action'], true);
 
 # ID must be numeric
 if($_POST['action']!="add" && !is_numeric($_POST['appid'])) { $Result->show("danger", _("Invalid ID"), true, true); }
@@ -81,6 +84,7 @@ if($_POST['action']!="add") {
 	    	}
 	    	?>
 	    	</select>
+	    </td>
        	<td class="info2"><?php print _('Application permissions'); ?></td>
     </tr>
 
@@ -101,7 +105,68 @@ if($_POST['action']!="add") {
 	    	}
 	    	?>
 	    	</select>
+	    </td>
        	<td class="info2"><?php print _('Application security'); ?></td>
+    </tr>
+
+	<!-- lock -->
+	<tr>
+	    <td><?php print _('Transaction lock'); ?></td>
+	    <td>
+	    	<select name="app_lock" class="form-control input-sm input-w-auto">
+	    	<?php
+	    	$perms = array(0=>"No",1=>"Yes");
+	    	foreach($perms as $k=>$p) {
+		    	if($k==$api->app_lock)	{ print "<option value='$k' selected='selected'>"._($p)."</option>"; }
+		    	else					{ print "<option value='$k' 				   >"._($p)."</option>"; }
+	    	}
+	    	?>
+	    	</select>
+	    </td>
+       	<td class="info2"><?php print _('Lock POST transactions'); ?></td>
+    </tr>
+
+	<!-- lock wait -->
+	<tr>
+	    <td><?php print _('Lock timeout'); ?></td>
+	    <td>
+	    	<input name="app_lock_wait" class="form-control input-sm input-w-auto" value="<?php print $api->app_lock_wait; ?>">
+	    </td>
+       	<td class="info2"><?php print _('Seconds to wait for transaction lock to clear'); ?></td>
+    </tr>
+
+	<!-- app_nest_custom_fields -->
+	<tr>
+	    <td><?php print _('Nest custom fields'); ?></td>
+	    <td>
+	    	<select name="app_nest_custom_fields" class="form-control input-sm input-w-auto">
+	    	<?php
+	    	$perms = array(0=>"No",1=>"Yes");
+	    	foreach($perms as $k=>$p) {
+		    	if($k==$api->app_nest_custom_fields)	{ print "<option value='$k' selected='selected'>"._($p)."</option>"; }
+		    	else									{ print "<option value='$k' 				   >"._($p)."</option>"; }
+	    	}
+	    	?>
+	    	</select>
+	    </td>
+       	<td class="info2"><?php print _('Group custom fields to separate item in result'); ?></td>
+    </tr>
+
+	<!-- app_show_links -->
+	<tr>
+	    <td><?php print _('Show links'); ?></td>
+	    <td>
+	    	<select name="app_show_links" class="form-control input-sm input-w-auto">
+	    	<?php
+	    	$perms = array(0=>"No",1=>"Yes");
+	    	foreach($perms as $k=>$p) {
+		    	if($k==$api->app_show_links)	{ print "<option value='$k' selected='selected'>"._($p)."</option>"; }
+		    	else							{ print "<option value='$k' 				   >"._($p)."</option>"; }
+	    	}
+	    	?>
+	    	</select>
+	    </td>
+       	<td class="info2"><?php print _('Show links in result (override with ?links=true)'); ?></td>
     </tr>
 
     <!-- description -->
@@ -117,8 +182,6 @@ if($_POST['action']!="add") {
 </form>
 
 </div>
-
-
 
 
 <!-- footer -->

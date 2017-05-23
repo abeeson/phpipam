@@ -74,9 +74,9 @@ $(document).ready(function() {
 
 
 <!-- charts -->
-<script language="javascript" type="text/javascript" src="js/1.2/flot/jquery.flot.js"></script>
-<script language="javascript" type="text/javascript" src="js/1.2/flot/jquery.flot.categories.js"></script>
-<!--[if lte IE 8]><script language="javascript" type="text/javascript" src="js/1.2/flot/excanvas.min.js"></script><![endif]-->
+<script language="javascript" type="text/javascript" src="js/<?php print SCRIPT_PREFIX; ?>/flot/jquery.flot.js"></script>
+<script language="javascript" type="text/javascript" src="js/<?php print SCRIPT_PREFIX; ?>/flot/jquery.flot.categories.js"></script>
+<!--[if lte IE 8]><script language="javascript" type="text/javascript" src="js/<?php print SCRIPT_PREFIX; ?>/flot/excanvas.min.js"></script><![endif]-->
 
 
 <div class="welcome" style="text-align:right">
@@ -86,14 +86,14 @@ $(document).ready(function() {
 <?php
 
 # fetch all widgets
-$widgets = $Tools->fetch_widgets ($User->isadmin, false);
+$widgets = $Tools->fetch_widgets ($User->is_admin(false), false);
 $widgets = (array) $widgets;
 
 # show user-selected widgets
 $uwidgets = array_filter(explode(";",$User->user->widgets));
 
 # if user has no groups and is not admin print warning
-if ($User->isadmin!==true && (strlen($User->user->groups)==0 || $User->user->groups==="null") ) {
+if ($User->is_admin(false)!==true && (strlen($User->user->groups)==0 || $User->user->groups==="null") ) {
 	print '<div class="row-fluid">';
 	print "	<div class='col-xs-12 col-sm-12 col-md-12 col-lg-12' style='min-height:10px'>";
 	print "	<div class='inner' style='min-height:10px'>";
@@ -158,7 +158,7 @@ if(sizeof($uwidgets)>1) {
 				if($wdet['whref']=="yes")	{ print "<a href='".create_link("widgets",$wdet['wfile'])."'> <h4>"._($wdet['wtitle'])."<i class='fa fa-external-link fa-gray pull-right'></i></h4></a>"; }
 				else						{ print "<h4>"._($wdet['wtitle'])."</h4>"; }
 				print "		<div class='hContent'>";
-				print "			<div style='text-align:center;padding-top:50px;'><strong>"._('Loading statistics')."</strong><br><i class='fa fa-spinner fa-spin'></i></div>";
+				print "			<div style='text-align:center;padding-top:50px;'><strong>"._('Loading widget')."</strong><br><i class='fa fa-spinner fa-spin'></i></div>";
 				print "		</div>";
 				print "	</div>";
 				print "	</div>";

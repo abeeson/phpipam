@@ -45,7 +45,7 @@ else {
 	print "<tr>";
 	print "	<th>"._('Object')."</th>";
 	print "	<th>"._('Description')."</th>";
-	print "	<th>"._('Section')."</th>";
+	print "	<th class='hidden-xs'>"._('Section')."</th>";
 	print "	<th>"._('VLAN')."</th>";
 	print "	<th></th>";
 	print "</tr>";
@@ -71,7 +71,7 @@ else {
 				else 									  { $master = false; print "	<td><a href='".create_link("subnets",$f['sectionId'],$f['subnetId'])."'><i class='fa fa-sfolder fa-sitemap' ></i>".$Subnets->transform_to_dotted($f['subnet'])."/$f[mask]</a> $fullinfo</td>"; }
 			}
 			print "	<td>$f[description]</td>";
-			print "	<td><a href='".create_link("subnets",$f['sectionId'])."'>$f[section]</a></td>";
+			print "	<td class='hidden-xs'><a href='".create_link("subnets",$f['sectionId'])."'>$f[section]</a></td>";
 
 			# get vlan info
 			if(strlen($f['vlanId'])>0 && $f['vlanId']!=0) {
@@ -83,8 +83,7 @@ else {
 
 			# usage
 			if(!$master) {
-	    		$address_count = $Addresses->count_subnet_addresses ($f['subnetId']);
-	    		$subnet_usage = $Subnets->calculate_subnet_usage (gmp_strval($address_count), $f['mask'], $f['subnet'], $f['isFull']);
+	    		$subnet_usage = $Subnets->calculate_subnet_usage ($f, false);
 	    	}
 
 			# add address

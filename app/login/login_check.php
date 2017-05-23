@@ -18,6 +18,8 @@ $User 		= new User ($Database);
 $Result 	= new Result ();
 $Log 		= new Logging ($Database);
 
+# strip input tags form username only - password stip later because od LDAP
+$_POST['ipamusername'] = $User->strip_input_tags ($_POST['ipamusername']);
 
 # Authenticate
 if( !empty($_POST['ipamusername']) && !empty($_POST['ipampassword']) )  {

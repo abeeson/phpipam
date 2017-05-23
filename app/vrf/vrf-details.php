@@ -6,9 +6,6 @@
 # verify that user is logged in
 $User->check_user_session();
 
-# get VLAN details
-$vrf = $Tools->fetch_vrf ($method="vrfId", $_GET['subnetId']);
-
 # not existing
 if(!$vrf) { $Result->show("danger", _('Invalid VRF id'), true); }
 
@@ -77,12 +74,12 @@ $cfields = $Tools->fetch_custom_fields ('vrf');
 		print "<tr><td><hr></td><td></td></tr>";
 		// fields
 		foreach($cfields as $key=>$field) {
-			$vrf->$key = str_replace("\n", "<br>",$vrf->$key);
+			$vrf->{$key} = str_replace("\n", "<br>",$vrf->{$key});
 			// create links
-			$vrf->$key = $Result->create_links($vrf->$key);
+			$vrf->{$key} = $Result->create_links($vrf->{$key});
 			print "<tr>";
 			print "	<th>$key</th>";
-			print "	<td style='vertical-align:top;align:left;'>".$vrf->$key."</td>";
+			print "	<td style='vertical-align:top;align:left;'>".$vrf->{$key}."</td>";
 			print "</tr>";
 		}
 		// divider

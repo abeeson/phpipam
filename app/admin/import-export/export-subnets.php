@@ -52,6 +52,7 @@ $custom_fields = $Tools->fetch_custom_fields('subnets');
 $today = date("Ymd");
 $filename = $today."_phpipam_subnets_export.xls";
 $workbook = new Spreadsheet_Excel_Writer();
+$workbook->setVersion(8);
 
 //formatting headers
 $format_header =& $workbook->addFormat();
@@ -66,6 +67,7 @@ $format_text =& $workbook->addFormat();
 // Create a worksheet
 $worksheet_name = "Subnets";
 $worksheet =& $workbook->addWorksheet($worksheet_name);
+$worksheet->setInputEncoding("utf-8");
 
 $lineCount = 0;
 $rowCount = 0;
@@ -131,6 +133,7 @@ if($all_sections!==false) {
 	foreach ($all_sections as $section) {
 		//cast
 		$section = (array) $section;
+		$section['name'] = str_replace(" ", "___", $section['name']);
 
 		if( (isset($_GET['exportSection__'.$section['name']])) && ($_GET['exportSection__'.$section['name']] == "on") ) {
 			// get all subnets in section
@@ -143,14 +146,14 @@ if($all_sections!==false) {
 				$subnet = (array) $subnet;
 
 				if( (isset($_GET['section'])) && ($_GET['section'] == "on") ) {
-					$worksheet->write($lineCount, $rowCount, $section['name'], $format_text);
+					$worksheet->write($lineCount, $rowCount, str_replace("___", " ", $section['name']), $format_text);
 					$rowCount++;
 				}
 
 				if( (isset($_GET['subnet'])) && ($_GET['subnet'] == "on") ) {
 					$subnet_text = '';
                                         if ($subnet['isFolder']) {
-						$subnet_text = $subnet['description']." (folder)";	
+						$subnet_text = $subnet['description']." (folder)";
 					} else {
 						$subnet_text = $subnet['ip']."/".$subnet['mask'];
 					}
@@ -180,7 +183,7 @@ if($all_sections!==false) {
 				if( (isset($_GET['VRF'])) && ($_GET['VRF'] == "on") ) {
 					// get vrf
 					if (!empty($subnet['vrfId'])) {
-						$vrf = (array) $Tools->fetch_vrf(null, $subnet['vrfId']);
+						$vrf = (array) $Tools->fetch_object("vrf", "vrfId", $subnet['vrfId']);
 						$worksheet->write($lineCount, $rowCount, $vrf['name'], $format_text);
 					} else {
 						$worksheet->write($lineCount, $rowCount, '', $format_text);

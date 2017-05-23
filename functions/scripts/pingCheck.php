@@ -29,7 +29,6 @@
  *
  */
 
-
 # include required scripts
 require( dirname(__FILE__) . '/../functions.php' );
 require( dirname(__FILE__) . '/../../functions/classes/class.Thread.php');
@@ -48,12 +47,18 @@ $Scan->ping_set_exit(true);
 $Scan->reset_debugging(false);
 // fetch agent
 $agent = $Tools->fetch_object("scanAgents", "id", 1);
+// set address types array
+$Tools->get_addresses_types ();
 // change scan type?
-// $Scan->reset_scan_method ("fping");
+if(@$config['ping_check_method'])
+$Scan->reset_scan_method ($config['ping_check_method']);
+
 // set ping statuses
 $statuses = explode(";", $Scan->settings->pingStatus);
 // set mail override flag
-$send_mail = true;
+if(!isset($config['ping_check_send_mail'])) {
+	$config['ping_check_send_mail'] = true;
+}
 
 // response for mailing
 $address_change = array();			// Array with differences, can be used to email to admins
@@ -80,7 +85,7 @@ if(!file_exists($Scan->settings->scanFPingPath)){ die("Invalid fping path!"); }
 //first fetch all subnets to be scanned
 $scan_subnets = $Subnets->fetch_all_subnets_for_pingCheck (1);
 if($Scan->debugging)							{ print_r($scan_subnets); }
-if($scan_subnets===false) 						{ die("No subnets are marked for checking status updates"); }
+if($scan_subnets===false) 						{ die("No subnets are marked for checking status updates\n"); }
 //fetch all addresses that need to be checked
 foreach($scan_subnets as $s) {
 
@@ -93,22 +98,23 @@ foreach($scan_subnets as $s) {
 			$subnets[] = array("id"=>$s->id, "cidr"=>$Subnets->transform_to_dotted($s->subnet)."/".$s->mask);
 		}
 		//save addresses
-		if(sizeof($subnet_addresses)>1) {
+		if(sizeof($subnet_addresses)>0) {
 			foreach($subnet_addresses as $a) {
 				//ignore excludePing
 				if($a->excludePing!=1) {
 					//create different array for fping
 					if($Scan->icmp_type=="fping")	{
-						$addresses2[$s->id][$a->id] = array("id"=>$a->id, "ip_addr"=>$a->ip_addr, "description"=>$a->description, "dns_name"=>$a->dns_name, "subnetId"=>$a->subnetId, "lastSeenOld"=>$a->lastSeen, "lastSeen"=>$a->lastSeen);	//used for status check
+						$addresses2[$s->id][$a->id] = array("id"=>$a->id, "ip_addr"=>$a->ip_addr, "description"=>$a->description, "dns_name"=>$a->dns_name, "subnetId"=>$a->subnetId, "lastSeenOld"=>$a->lastSeen, "lastSeen"=>$a->lastSeen, "state"=>$a->state);	//used for status check
 						$addresses[$s->id][$a->id]  = $a->ip_addr;																												//used for alive check
 					}
 					else {
-						$addresses[] 		 		= array("id"=>$a->id, "ip_addr"=>$a->ip_addr, "description"=>$a->description, "dns_name"=>$a->dns_name, "subnetId"=>$a->subnetId, "lastSeenOld"=>$a->lastSeen, "lastSeen"=>$a->lastSeen);
+						$addresses[] 		 		= array("id"=>$a->id, "ip_addr"=>$a->ip_addr, "description"=>$a->description, "dns_name"=>$a->dns_name, "subnetId"=>$a->subnetId, "lastSeenOld"=>$a->lastSeen, "lastSeen"=>$a->lastSeen, "state"=>$a->state);
 					}
 				}
 			}
 		}
-
+		// save update time
+		$Scan->update_subnet_scantime ($s->id, $nowdate);
 	}
 }
 
@@ -265,6 +271,11 @@ foreach ($address_change as $k=>$change) {
     if ($change['lastSeenNew']!=NULL && $deviceDiff >= (int) $statuses[1]) {
         $address_change[$k]['oldStatus'] = 2;
         $address_change[$k]['newStatus'] = 0;
+        // update tag if not already online
+        // tags have different indexes than script exit code is - 1=offline, 2=online
+        if($address_change[$k]['state']!=2 && $Scan->settings->updateTags==1 && $Tools->address_types[$address_change[$k]['state']]['updateTag']==1) {
+	        $Scan->update_address_tag ($address_change[$k]['id'], 2, $address_change[$k]['state'], $change['lastSeenOld']);
+    	}
     }
     // now offline, and diff > offline period, do checks
     elseif($change['lastSeenNew']==NULL && $deviceDiff >= (int) $statuses[1]) {
@@ -272,13 +283,39 @@ foreach ($address_change as $k=>$change) {
         if ($deviceDiff <= ((int) $statuses[1] + $agentDiff))  {
             $address_change[$k]['oldStatus'] = 0;
             $address_change[$k]['newStatus'] = 2;
+	        // update tag if not already offline
+	        // tags have different indexes than script exit code is - 1=offline, 2=online
+	        if($address_change[$k]['state']!=1 && $Scan->settings->updateTags==1 && $Tools->address_types[$address_change[$k]['state']]['updateTag']==1) {
+		        $Scan->update_address_tag ($address_change[$k]['id'], 1, $address_change[$k]['state'], $change['lastSeenOld']);
+		    }
         }
         else {
+        	// already reported, check tag
+	        if($address_change[$k]['state']!=1 && $Scan->settings->updateTags==1 && $Tools->address_types[$address_change[$k]['state']]['updateTag']==1) {
+		        $Scan->update_address_tag ($address_change[$k]['id'], 1, $address_change[$k]['state'], $change['lastSeenOld']);
+		    }
+        	// remove from change array
             unset ($address_change[$k]);
         }
     }
     // remove
     else {
+    	// check tag
+    	if ($change['lastSeenNew']!=NULL) {
+	        // update tag if not already online
+	        // tags have different indexes than script exit code is - 1=offline, 2=online
+	        if($address_change[$k]['state']!=2 && $Scan->settings->updateTags==1 && $Tools->address_types[$address_change[$k]['state']]['updateTag']==1) {
+		        $Scan->update_address_tag ($address_change[$k]['id'], 2, $address_change[$k]['state'], $change['lastSeenOld']);
+	    	}
+    	}
+    	else {
+    		// update tag if not already offline
+	        // tags have different indexes than script exit code is - 1=offline, 2=online
+	        if($address_change[$k]['state']!=1 && $Scan->settings->updateTags==1 && $Tools->address_types[$address_change[$k]['state']]['updateTag']==1) {
+		        $Scan->update_address_tag ($address_change[$k]['id'], 1, $address_change[$k]['state'], $change['lastSeenOld']);
+		    }
+    	}
+
         unset ($address_change[$k]);
     }
 }
@@ -291,7 +328,7 @@ $Scan->ping_update_scanagent_checktime (1, $nowdate);
 if($Scan->debugging)							{ print "\nAddress changes:\n----------\n"; print_r($address_change); }
 
 # all done, mail diff?
-if(sizeof($address_change)>0 && $send_mail) {
+if(sizeof($address_change)>0 && $config['ping_check_send_mail']) {
 
 	# remove old classes
 	unset($Database, $Subnets, $Addresses, $Tools, $Scan, $Result);
@@ -332,17 +369,16 @@ if(sizeof($address_change)>0 && $send_mail) {
 	$subject	= "phpIPAM IP state change ".$nowdate;
 
 	//html
-	$content[] = "<h3>phpIPAM host changes</h3>";
-	$content[] = "<table style='margin-left:10px;margin-top:5px;width:auto;padding:0px;border-collapse:collapse;border:1px solid gray;'>";
+	$content[] = "<p style='margin-left:10px;'>$Subnets->mail_font_style <font style='font-size:16px;size:16px;'>phpIPAM host changes</font></font></p><br>";
+
+	$content[] = "<table style='margin-left:10px;margin-top:5px;width:auto;padding:0px;border-collapse:collapse;border:1px solid #ccc;'>";
 	$content[] = "<tr>";
-	$content[] = "	<th style='padding:3px 8px;border:1px solid silver;border-bottom:2px solid gray;'>IP</th>";
-	$content[] = "	<th style='padding:3px 8px;border:1px solid silver;border-bottom:2px solid gray;'>Description</th>";
-	$content[] = "	<th style='padding:3px 8px;border:1px solid silver;border-bottom:2px solid gray;'>Hostname</th>";
-	$content[] = "	<th style='padding:3px 8px;border:1px solid silver;border-bottom:2px solid gray;'>Subnet</th>";
-	$content[] = "	<th style='padding:3px 8px;border:1px solid silver;border-bottom:2px solid gray;'>Section</th>";
-	$content[] = "	<th style='padding:3px 8px;border:1px solid silver;border-bottom:2px solid gray;'>last seen</th>";
-	$content[] = "	<th style='padding:3px 8px;border:1px solid silver;border-bottom:2px solid gray;'>old status</th>";
-	$content[] = "	<th style='padding:3px 8px;border:1px solid silver;border-bottom:2px solid gray;'>new status</th>";
+	$content[] = "	<th style='padding:3px 8px;border:1px solid #ccc;border-bottom:2px solid gray;white-space:nowrap;'>$Subnets->mail_font_style IP</font></th>";
+	$content[] = "	<th style='padding:3px 8px;border:1px solid #ccc;border-bottom:2px solid gray;'>$Subnets->mail_font_style Description</font></th>";
+	$content[] = "	<th style='padding:3px 8px;border:1px solid #ccc;border-bottom:2px solid gray;'>$Subnets->mail_font_style Hostname</font></th>";
+	$content[] = "	<th style='padding:3px 8px;border:1px solid #ccc;border-bottom:2px solid gray;'>$Subnets->mail_font_style Subnet</font></th>";
+	$content[] = "	<th style='padding:3px 8px;border:1px solid #ccc;border-bottom:2px solid gray;'>$Subnets->mail_font_style Last seen</font></th>";
+	$content[] = "	<th style='padding:3px 8px;border:1px solid #ccc;border-bottom:2px solid gray;'>$Subnets->mail_font_style Status</font></th>";
 	$content[] = "</tr>";
 
 	//plain
@@ -362,26 +398,29 @@ if(sizeof($address_change)>0 && $send_mail) {
 
 		//set subnet
 		$subnet 	 = $Subnets->fetch_subnet(null, $change['subnetId']);
-		//set section
-		$section 	 = $Tools->fetch_object("sections", "id", $subnet->sectionId);
 		//ago
-		if(is_null($change['lastSeen']) || $change['lastSeen']=="0000-00-00 00:00:00") {
+		if(is_null($change['lastSeen']) || $change['lastSeen']=="1970-01-01 00:00:01" || $change['lastSeen']=="0000-00-00 00:00:00") {
 			$ago	  = "never";
 		} else {
 			$timeDiff = $now - strtotime($change['lastSeen']);
-			$ago 	  = $change['lastSeen']." (".$Result->sec2hms($timeDiff)." ago)";
+
+    		// reformat
+    		$lastSeen = date("m/d H:i", strtotime($change['lastSeen']) );
+			$ago 	  = $lastSeen." (".$Result->sec2hms($timeDiff)." ago)";
 		}
+        // desc
+		$change['description'] = strlen($change['description'])>0 ? "$Subnets->mail_font_style $change[description]</font>" : "$Subnets->mail_font_style / </font>";
+		// subnet desc
+		$subnet->description = strlen($subnet->description)>0 ? "$Subnets->mail_font_style $subnet->description</font>" : "$Subnets->mail_font_style / </font>";
 
 		//content
 		$content[] = "<tr>";
-		$content[] = "	<td style='padding:3px 8px;border:1px solid silver;'><a href='".rtrim($Scan->settings->siteURL, "/")."".create_link("subnets",$section->id,$subnet->id)."'>".$Subnets->transform_to_dotted($change['ip_addr'])."</a></td>";
-		$content[] = "	<td style='padding:3px 8px;border:1px solid silver;'>$change[description]</td>";
-		$content[] = "	<td style='padding:3px 8px;border:1px solid silver;'>$change[dns_name]</td>";
-		$content[] = "	<td style='padding:3px 8px;border:1px solid silver;'><a href='".rtrim($Scan->settings->siteURL, "/")."".create_link("subnets",$section->id,$subnet->id)."'>".$Subnets->transform_to_dotted($subnet->subnet)."/".$subnet->mask." - ".$subnet->description."</a></td>";
-		$content[] = "	<td style='padding:3px 8px;border:1px solid silver;'><a href='".rtrim($Scan->settings->siteURL, "/")."".create_link("subnets",$section->id)."'>$section->name $section->description</a></td>";
-		$content[] = "	<td style='padding:3px 8px;border:1px solid silver;'>$ago</td>";
-		$content[] = "	<td style='padding:3px 8px;border:1px solid silver;'>$oldStatus</td>";
-		$content[] = "	<td style='padding:3px 8px;border:1px solid silver;'>$newStatus</td>";
+		$content[] = "	<td style='padding:3px 8px;border:1px solid #ccc;'><a href='".rtrim(str_replace(BASE, "",$Scan->settings->siteURL), "/")."".create_link("subnets",$subnet->sectionId,$subnet->id)."'>$Subnets->mail_font_style_href ".$Subnets->transform_to_dotted($change['ip_addr'])."</font></a></td>";
+		$content[] = "	<td style='padding:3px 8px;border:1px solid #ccc;'>$Subnets->mail_font_style $change[description]</font></td>";
+		$content[] = "	<td style='padding:3px 8px;border:1px solid #ccc;'>$Subnets->mail_font_style_href $change[dns_name]</font></td>";
+		$content[] = "	<td style='padding:3px 8px;border:1px solid #ccc;'><a href='".rtrim(str_replace(BASE, "",$Scan->settings->siteURL), "/")."".create_link("subnets",$subnet->sectionId,$subnet->id)."'>$Subnets->mail_font_style_href ".$Subnets->transform_to_dotted($subnet->subnet)."/".$subnet->mask."</font></a>".$subnet->description."</td>";
+		$content[] = "	<td style='padding:3px 8px;border:1px solid #ccc;'>$Subnets->mail_font_style $ago</td>";
+		$content[] = "	<td style='padding:3px 8px;border:1px solid #ccc;'>$Subnets->mail_font_style $oldStatus > $newStatus</td>";
 		$content[] = "</tr>";
 
 		//plain content

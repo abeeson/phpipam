@@ -8,14 +8,54 @@
 
 class L2domains_controller extends Common_api_functions {
 
-	/* public variables */
+
+	/**
+	 * _params provided
+	 *
+	 * @var mixed
+	 * @access public
+	 */
 	public $_params;
 
-	/* object holders */
-	protected $Database;			// Database object
-	protected $Sections;			// Sections object
-	protected $Tools;				// Tools object
-	protected $Admin;				// Admin object
+	/**
+	 * custom_fields
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
+	public $custom_fields;
+
+	/**
+	 * Database object
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
+	protected $Database;
+
+	/**
+	 * master Sections object
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
+	protected $Sections;
+
+	/**
+	 * Master Tools object
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
+	protected $Tools;
+
+	/**
+	 * Master Admin object
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
+	protected $Admin;
 
 
 	/**
@@ -54,6 +94,7 @@ class L2domains_controller extends Common_api_functions {
 		$this->validate_options_request ();
 
 		// methods
+		$result = array();
 		$result['methods'] = array(
 								array("href"=>"/api/l2domains/".$this->_params->app_id."/", 		"methods"=>array(array("rel"=>"options", "method"=>"OPTIONS"))),
 								array("href"=>"/api/l2domains/".$this->_params->app_id."/{id}/", 	"methods"=>array(array("rel"=>"read", 	"method"=>"GET"),
@@ -73,10 +114,10 @@ class L2domains_controller extends Common_api_functions {
 	 * Read domain functions
 	 *
 	 *	identifier can be:
-	 *		- NONE 				// will return all domains
-	 *		- {id}
-	 *		- {id}/vlans/
-	 *		- custom_fields
+	 *		- / 				// will return all domains
+	 *		- /{id}/
+	 *		- /{id}/vlans/
+	 *		- /custom_fields/
 	 *
 	 * @access public
 	 * @return void
@@ -145,6 +186,9 @@ class L2domains_controller extends Common_api_functions {
 	 * @return void
 	 */
 	public function POST () {
+		# remap keys
+		$this->remap_keys ();
+
 		# check for valid keys
 		$values = $this->validate_keys ();
 
@@ -156,7 +200,7 @@ class L2domains_controller extends Common_api_functions {
 													{ $this->Response->throw_exception(500, "Domain creation failed"); }
 		else {
 			//set result
-			return array("code"=>201, "data"=>"L2 domain created", "location"=>"/api/".$this->_params->app_id."/l2domains/".$this->Admin->lastId."/");
+			return array("code"=>201, "message"=>"L2 domain created", "id"=>$this->Admin->lastId, "location"=>"/api/".$this->_params->app_id."/l2domains/".$this->Admin->lastId."/");
 		}
 	}
 
@@ -171,6 +215,9 @@ class L2domains_controller extends Common_api_functions {
 	 * @return void
 	 */
 	public function PATCH () {
+		# remap keys
+		$this->remap_keys ();
+
 		# verify
 		$this->validate_domain_edit ();
 		# check that it exists
@@ -184,7 +231,7 @@ class L2domains_controller extends Common_api_functions {
 													{ $this->Response->throw_exception(500, "Domain edit failed"); }
 		else {
 			//set result
-			return array("code"=>200, "data"=>"L2 domain updated");
+			return array("code"=>200, "message"=>"L2 domain updated");
 		}
 	}
 
@@ -205,6 +252,7 @@ class L2domains_controller extends Common_api_functions {
 		$this->validate_domain ();
 
 		# set variables for update
+		$values = array();
 		$values["id"] = $this->_params->id;
 
 		# execute delete
@@ -215,7 +263,7 @@ class L2domains_controller extends Common_api_functions {
 			$this->Admin->update_object_references ("vlans", "domainId", $this->_params->id, 1);
 
 			// set result
-			return array("code"=>200, "data"=>"L2 domain deleted and vlans migrated to default domain");
+			return array("code"=>200, "message"=>"L2 domain deleted and vlans migrated to default domain");
 		}
 	}
 
@@ -239,10 +287,10 @@ class L2domains_controller extends Common_api_functions {
 		// validate id
 		if(!isset($this->_params->id))														{ $this->_params->id = 1; }
 		// validate number
-		if(!is_numeric($this->_params->id))													{ $this->Response->throw_exception(400, "Domain id must be numeric"); }
+		if(!is_numeric($this->_params->id))													{ $this->Response->throw_exception(409, "Domain id must be numeric"); }
 		// check that it exists
 		if($this->Tools->fetch_object ("vlanDomains", "id", $this->_params->id) === false )
-																							{ $this->Response->throw_exception(400, "Invalid domain id"); }
+																							{ $this->Response->throw_exception(404, "Invalid domain id"); }
 	}
 
 
@@ -256,21 +304,21 @@ class L2domains_controller extends Common_api_functions {
 		// delete checks
 		if($_SERVER['REQUEST_METHOD']=="DELETE") {
 			// we cannot delete default domain
-			if(@$this->_params->id==1 && $_SERVER['REQUEST_METHOD']=="DELETE")				{ $this->Response->throw_exception(400, "Default domain cannot be deleted"); }
+			if(@$this->_params->id==1 && $_SERVER['REQUEST_METHOD']=="DELETE")				{ $this->Response->throw_exception(409, "Default domain cannot be deleted"); }
 			// ID must be numeric
-			if(!is_numeric($this->_params->id))												{ $this->Response->throw_exception(400, "Invalid domain id"); }
+			if(!is_numeric($this->_params->id))												{ $this->Response->throw_exception(404, "Invalid domain id"); }
 		}
 		// create checks
 		elseif ($_SERVER['REQUEST_METHOD']=="POST") {
 			// name must be present
-			if(@$this->_params->name == "" || !isset($this->_params->name)) 				{ $this->Response->throw_exception(400, "Domain name is mandatory"); }
+			if(@$this->_params->name == "" || !isset($this->_params->name)) 				{ $this->Response->throw_exception(409, "Domain name is mandatory"); }
 		}
 		// update checks
 		elseif ($_SERVER['REQUEST_METHOD']=="PATCH") {
 			// ID must be numeric
-			if(!is_numeric($this->_params->id))												{ $this->Response->throw_exception(400, "Invalid domain id"); }
+			if(!is_numeric($this->_params->id))												{ $this->Response->throw_exception(409, "Invalid domain id"); }
 			// name must be present
-			if(@$this->_params->name == "" && isset($this->_params->name)) 					{ $this->Response->throw_exception(400, "Domain name is mandatory"); }
+			if(@$this->_params->name == "" && isset($this->_params->name)) 					{ $this->Response->throw_exception(409, "Domain name is mandatory"); }
 		}
 
 	}

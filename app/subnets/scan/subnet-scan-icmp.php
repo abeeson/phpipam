@@ -7,6 +7,14 @@
 # verify that user is logged in
 $User->check_user_session();
 
+# create csrf token
+$csrf = $User->csrf_cookie ("create", "scan");
+
+# validate subnetId and type
+if(!is_numeric($_POST['subnetId']))                        { $Result->show("danger", "Invalid subnet Id", true); die(); }
+if(!preg_match('/[^A-Za-z0-9-]*$/', $_POST['type']))       { $Result->show("danger", "Invalid scan type", true); die(); }
+
+
 # invoke CLI with threading support
 $cmd = $Scan->php_exec." ".dirname(__FILE__) . '/../../../functions/scan/subnet-scan-icmp-execute.php'." 'discovery' ".$_POST['subnetId'];
 
@@ -14,6 +22,7 @@ $cmd = $Scan->php_exec." ".dirname(__FILE__) . '/../../../functions/scan/subnet-
 exec($cmd, $output, $retval);
 
 # format result back to object
+$output = array_values(array_filter($output));
 $script_result = json_decode($output[0]);
 
 # if method is fping we need to check against existing hosts because it produces list of all ips !
@@ -42,7 +51,7 @@ print "<h5>"._('Scan results').":</h5><hr>";
 # json error
 if(json_last_error()!=0)						{ $Result->show("danger", "Invalid JSON response"." - ".$Result->json_error_decode(json_last_error()), false); }
 # die if error
-elseif($retval!=0) 								{ $Result->show("danger", "Error executing scan! Error code - $retval", false); }
+elseif($retval!==0) 							{ $Result->show("danger", "Error executing scan! Error code - $retval", false); }
 # error?
 elseif($script_result->status===1)				{ $Result->show("danger", $script_result->error, false); }
 # empty
@@ -95,6 +104,7 @@ else {
 		print "<td>";
 		print "	<input type='text' class='form-control input-sm' name='description$m'>";
 		print "	<input type='hidden' name='ip$m' value=".$Subnets->transform_to_dotted($ip).">";
+		print " <input type='hidden' name='csrf_cookie' value='$csrf'>";
 		print "</td>";
 		//hostname
 		print "<td>";
@@ -126,8 +136,8 @@ else {
     			elseif($field['type'] == "date" || $field['type'] == "datetime") {
     				// just for first
     				if($timeP==0) {
-    					print '<link rel="stylesheet" type="text/css" href="css/1.2/bootstrap/bootstrap-datetimepicker.min.css">';
-    					print '<script type="text/javascript" src="js/1.2/bootstrap-datetimepicker.min.js"></script>';
+    					print '<link rel="stylesheet" type="text/css" href="css/'.SCRIPT_PREFIX.'/bootstrap/bootstrap-datetimepicker.min.css">';
+    					print '<script type="text/javascript" src="js/'.SCRIPT_PREFIX.'/bootstrap-datetimepicker.min.js"></script>';
     					print '<script type="text/javascript">';
     					print '$(document).ready(function() {';
     					//date only

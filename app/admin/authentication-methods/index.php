@@ -14,12 +14,18 @@ $all_method_types = $User->fetch_available_auth_method_types();
 <hr>
 
 <!-- Add new -->
-<div class="btn-group" style="margin-bottom: 20px;">
+<div class="dropdown" style="margin-bottom: 20px;">
+    <button class="btn btn-default btn-sm dropdown-toggle" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true"><?php print _("Create new:"); ?> <span class="caret"></span>
+</button>
+
+<ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
 <?php
 foreach($all_method_types as $type) {
-	print "<button class='btn btn-sm btn-default editAuthMethod' style='margin-bottom:10px;' data-action='add' data-type='$type'><i class='fa fa-plus'></i> "._("Create new $type authentication")."</button>";
+	print "<li><a href='' class='editAuthMethod' data-action='add' data-type='$type'><i class='fa fa-plus'></i> "._("Create new $type authentication")."</a></li>";
 }
 ?>
+</ul>
+
 </div>
 
 <!-- table -->
@@ -86,7 +92,7 @@ foreach($all_methods as $method) {
 <div class="alert alert-info alert-absolute" style="margin-top:30px;">
 	<?php print _("Here you can set different authentication methods for your users."); ?>
 	<hr>
-	<?php print _("phpIPAM currently supports 6 methods for authentication:"); ?>
+	<?php print _("phpIPAM currently supports 7 methods for authentication:"); ?>
 	<ul>
 		<li><?php print _("Local authentication"); ?></li>
 		<li><?php print _("Apache authentication"); ?></li>
@@ -94,6 +100,7 @@ foreach($all_methods as $method) {
 		<li><?php print _("LDAP authentication"); ?></li>
 		<li><?php print _("NetIQ authentication"); ?></li>
 		<li><?php print _("Radius authentication"); ?></li>
+		<li><?php print _("SAMLv2 authentication"); ?></li>
 	</ul>
 	<br>
 	<?php print _("For AD/LDAP/NetIQ connection phpipam is using adLDAP, for documentation please check ")."<a href='http://adldap.sourceforge.net/'>adLDAP</a><br><br>"; ?>

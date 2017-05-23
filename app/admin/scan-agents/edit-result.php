@@ -15,9 +15,14 @@ $Result 	= new Result ();
 
 # verify that user is logged in
 $User->check_user_session();
+# check maintaneance mode
+$User->check_maintaneance_mode ();
+
+# strip input tags
+$_POST = $Admin->strip_input_tags($_POST);
 
 # validate csrf cookie
-$_POST['csrf_cookie']==$_SESSION['csrf_cookie'] ? :                      $Result->show("danger", _("Invalid CSRF cookie"), true);
+$User->csrf_cookie ("validate", "agent", $_POST['csrf_cookie']) === false ? $Result->show("danger", _("Invalid CSRF cookie"), true) : "";
 
 /* checks */
 $error = array();
@@ -74,11 +79,11 @@ else {
 
 		try { $Database->runQuery($query, array($_POST['id'])); }
 		catch (Exception $e) {
-			$this->Result->show("danger", _("Error: ").$e->getMessage());
+			$Result->show("danger", _("Error: ").$e->getMessage());
 			return false;
 		}
 		// references removed
-		$this->Result->show("info", _("Scan agent references removed"));
+		$Result->show("info", _("Scan agent references removed"));
 	}
 }
 

@@ -92,7 +92,7 @@ else {
 print "<h4>"._('Invalid addresses').'</h4><hr>';
 
 $invalid_subnets = $Addresses->find_invalid_addresses();
-if ($invalid_subnets===false) {
+if ($invalid_subnets===false || sizeof($invalid_subnets)==0) {
 	$Result->show ("success", _("No invalid addresses detected"), false);
 }
 else {
@@ -106,5 +106,11 @@ else {
 	}
 }
 
+
+print "<h4>"._('Missing indexes').'</h4><hr>';
+
+if($Tools->verify_database_indexes()===true) {
+	$Result->show ("success", _("No missing indexes detected"), false);
+}
 
 ?>

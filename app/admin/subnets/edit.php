@@ -21,8 +21,13 @@ $Result 	= new Result ();
 $User->check_user_session();
 
 # create csrf token
-$csrf = $User->create_csrf_cookie ();
+$csrf = $_POST['action']=="add" ? $User->csrf_cookie ("create", "subnet_add") : $User->csrf_cookie ("create", "subnet_".$_POST['subnetId']);
 
+# strip tags - XSS
+$_POST = $User->strip_input_tags ($_POST);
+
+# validate action
+$Admin->validate_action ($_POST['action'], true);
 
 # verify that user has permissions to add subnet
 if($_POST['action'] == "add") {
@@ -52,6 +57,10 @@ if ($_POST['action'] != "add") {
 }
 # we are adding new subnet
 else {
+    # fake freespaceMSID
+    if($_POST['freespaceMSID']) {
+        $_POST['subnetId'] = $_POST['freespaceMSID'];
+    }
 	# for selecting master subnet if added from subnet details and slave inheritance!
 	if(strlen($_POST['subnetId']) > 0) {
     	$subnet_old_temp = (array) $Subnets->fetch_subnet(null, $_POST['subnetId']);
@@ -67,7 +76,8 @@ else {
     	$subnet_old_details['pingSubnet'] 	    = @$subnet_old_temp['pingSubnet'];        // inherit pingSubnet
     	$subnet_old_details['discoverSubnet']   = @$subnet_old_temp['discoverSubnet'];    // inherit discovery
     	$subnet_old_details['nameserverId']     = @$subnet_old_temp['nameserverId'];      // inherit nameserver
-
+    	if($User->settings->enableLocations=="1")
+    	$subnet_old_details['location']         = @$subnet_old_temp['location'];          // inherit location
 	}
 	# set master if it came from free space!
 	if(isset($_POST['freespaceMSID'])) {
@@ -77,6 +87,7 @@ else {
 # fetch custom fields
 $custom_fields = $Tools->fetch_custom_fields('subnets');
 # fetch vrfs
+if($User->settings->enableVRF==1)
 $vrfs  = $Tools->fetch_all_objects("vrf", "name");
 # check if it has slaves - if yes it cannot be splitted!
 $slaves = $Subnets->has_slaves($_POST['subnetId']);
@@ -87,6 +98,10 @@ $sections = $Sections->fetch_all_sections();
 if(isset($_POST['vlanId'])) {
 	$subnet_old_details['vlanId'] = $_POST['vlanId'];
 }
+
+# all locations
+if($User->settings->enableLocations=="1")
+$locations = $Tools->fetch_all_objects ("locations", "name");
 
 # set readonly flag
 $readonly = $_POST['action']=="edit" || $_POST['action']=="delete" ? true : false;
@@ -117,7 +132,11 @@ $('.input-switch-agents-ping, .input-switch-agents-scan').on('switchChange.boots
 	if 		(ping==true || scan==true)		{ $("tr#scanAgentDropdown").removeClass("hidden"); }
 	else if (ping==false && scan==false)	{ $("tr#scanAgentDropdown").addClass("hidden"); }
 });
-
+<?php if ($User->settings->enableThreshold=="1") { ?>
+$('.slider').slider().on('slide', function(ev){
+    $('.slider-text span').html(ev.value);
+});
+<?php } ?>
 
 });
 </script>
@@ -138,7 +157,7 @@ $('.input-switch-agents-ping, .input-switch-agents-scan').on('switchChange.boots
         <td class="middle"><?php print _('Subnet'); ?></td>
         <td>
         	<?php
-            if ($_POST['subnetId'] && $_POST['action'] == "add"){ $showDropMenuFull = 1; }
+            if (($_POST['subnetId']||$_POST['subnet']) && $_POST['action'] == "add"){ $showDropMenuFull = 1; }
         	# set CIDR
         	if (isset($subnet_old_temp['subnet'])&&$subnet_old_temp['isFolder']!="1")	{ $cidr = $Subnets->transform_to_dotted($subnet_old_temp['subnet']).'/'.($subnet_old_temp['mask']+1);} 		//for nested
         	if (isset($subnet_old_temp['subnet']) && ($showDropMenuFull)) 				{ $dropdown_menu = $Subnets->subnet_dropdown_print_available($_POST['sectionId'], $_POST['subnetId']);  }
@@ -147,12 +166,12 @@ $('.input-switch-agents-ping, .input-switch-agents-scan').on('switchChange.boots
             if ($_POST['action'] != "add") 			{ $cidr = $Subnets->transform_to_dotted($subnet_old_details['subnet']).'/'.$subnet_old_details['mask']; } 	//editing existing
 
         	# reset CIDR if $showDropMenuFull
-        	if ($showDropMenuFull && strlen(@$dropdown_menu)>2) {
-	        	$cidr = explode("\n",$dropdown_menu);
-	        	$cidr = substr(strip_tags($cidr[1]), 2);
-	        	//validate
-	        	if ($Subnets->verify_cidr_address($cidr)===false) { unset($cidr); };
-	        }
+        	// if ($showDropMenuFull && strlen(@$dropdown_menu)>2) {
+	        // 	$cidr = explode("\n",$dropdown_menu);
+	        // 	$cidr = substr(strip_tags($cidr[1]), 2);
+	        // 	//validate
+	        // 	if ($Subnets->verify_cidr_address($cidr)===false) { unset($cidr); };
+	        // }
         	?>
 
 
@@ -174,8 +193,13 @@ $('.input-switch-agents-ping, .input-switch-agents-scan').on('switchChange.boots
 
         </td>
         <td class="info2">
-        	<button type="button" class="btn btn-xs btn-default show-masks" rel='tooltip' data-placement="bottom" title='<?php print _('Subnet masks'); ?>' data-closeClass="hidePopup2"><i class="fa fa-th-large"></i></button>
-        	<button type="button" class="btn btn-xs btn-default"  id='get-ripe' rel='tooltip' data-placement="bottom" title='<?php print _('Get information from RIPE / ARIN database'); ?>'><i class="fa fa-refresh"></i></button>
+            <div class="btn-group">
+            	<button type="button" class="btn btn-xs btn-default show-masks" rel='tooltip' data-placement="bottom" title='<?php print _('Subnet masks'); ?>' data-closeClass="hidePopup2"><i class="fa fa-th-large"></i></button>
+            	<?php if($User->settings->enableSNMP == "1" && $_POST['action']=="add") { ?>
+            	<button type="button" class="btn btn-xs btn-default"  id='snmp-routing' rel='tooltip' data-placement="bottom" title='<?php print _('Search for subnets through SNMP'); ?>'><i class="fa fa-cogs"></i></button>
+            	<?php } ?>
+            	<button type="button" class="btn btn-xs btn-default"  id='get-ripe' rel='tooltip' data-placement="bottom" title='<?php print _('Get information from RIPE / ARIN database'); ?>'><i class="fa fa-refresh"></i></button>
+            </div>
         	<?php print _('Enter subnet in CIDR format'); ?>
         </td>
     </tr>
@@ -227,7 +251,7 @@ $('.input-switch-agents-ping, .input-switch-agents-scan').on('switchChange.boots
 				<option value="0"><?php print _('None'); ?></option>
 				<?php
 				// fetch all devices
-				$devices = $Admin->fetch_all_objects("devices");
+				$devices = $Admin->fetch_all_objects("devices", "hostname");
 				// loop
 				if ($devices!==false) {
 					foreach($devices as $device) {
@@ -315,6 +339,26 @@ $('.input-switch-agents-ping, .input-switch-agents-scan').on('switchChange.boots
 
 	?>
 
+	<!-- Location -->
+	<?php if($User->settings->enableLocations=="1") { ?>
+	<tr>
+		<td><?php print _('Location'); ?></td>
+		<td>
+			<select name="location_item" class="form-control input-sm input-w-auto">
+    			<option value="0"><?php print _("None"); ?></option>
+    			<?php
+                if($locations!==false) {
+        			foreach($locations as $l) {
+        				if($subnet_old_details['location'] == $l->id)	{ print "<option value='$l->id' selected='selected'>$l->name</option>"; }
+        				else					{ print "<option value='$l->id'>$l->name</option>"; }
+        			}
+    			}
+    			?>
+			</select>
+		</td>
+	</tr>
+	<?php } ?>
+
 	<?php if($_POST['action']!="delete") { ?>
 	<!-- mark full -->
     <tr>
@@ -328,6 +372,16 @@ $('.input-switch-agents-ping, .input-switch-agents-scan').on('switchChange.boots
         </td>
         <td class="info2"><?php print _('Mark subnet as utilized'); ?></td>
     </tr>
+    <?php if ($User->settings->enableThreshold=="1") { ?>
+	<tr>
+        <td class="middle"><?php print _('Threshold'); ?></td>
+        <td>
+            <?php $svalue = !is_null($subnet_old_details['threshold']) ? $subnet_old_details['threshold'] : 0; ?>
+            <input type="text" style="width:200px;" class="slider" name="threshold" value="<?php print $svalue; ?>" data-slider-handle="square" data-slider-min="0" data-slider-max="100" data-slider-step="1" data-slider-value="<?php print $svalue; ?>" data-slider-orientation="horizontal" data-slider-selection="after">
+        </td>
+        <td class="info2"><?php print _('Set subnet alert threshold'); ?> <span class='badge badge1 badge5 slider-text'><span><?php print $svalue; ?></span>%</span></td>
+    </tr>
+    <?php } ?>
 
 	<?php } ?>
 
@@ -511,8 +565,8 @@ $('.input-switch-agents-ping, .input-switch-agents-scan').on('switchChange.boots
 				elseif($field['type'] == "date" || $field['type'] == "datetime") {
 					// just for first
 					if($timeP==0) {
-						print '<link rel="stylesheet" type="text/css" href="css/1.2/bootstrap/bootstrap-datetimepicker.min.css">';
-						print '<script type="text/javascript" src="js/1.2/bootstrap-datetimepicker.min.js"></script>';
+						print '<link rel="stylesheet" type="text/css" href="css/'.SCRIPT_PREFIX.'/bootstrap/bootstrap-datetimepicker.min.css">';
+						print '<script type="text/javascript" src="js/'.SCRIPT_PREFIX.'/bootstrap-datetimepicker.min.js"></script>';
 						print '<script type="text/javascript">';
 						print '$(document).ready(function() {';
 						//date only
@@ -553,7 +607,13 @@ $('.input-switch-agents-ping, .input-switch-agents-scan').on('switchChange.boots
 				}
 				//default - input field
 				else {
-					print ' <input type="text" class="ip_addr form-control input-sm" name="'. $field['nameNew'] .'" placeholder="'. $field['name'] .'" value="'. $subnet_old_details[$field['name']]. '" size="30" rel="tooltip" data-placement="right" title="'.$field['Comment'].'">'. "\n";
+                    // max length
+                    $maxlength = 0;
+                    if(strpos($field['type'],"varchar")!==false) {
+                        $maxlength = str_replace(array("varchar","(",")"),"", $field['type']);
+                    }
+                    // print
+					print ' <input type="text" class="ip_addr form-control input-sm" name="'. $field['nameNew'] .'" placeholder="'. $field['name'] .'" value="'. $subnet_old_details[$field['name']]. '" size="30" rel="tooltip" data-placement="right" maxlength="'.$maxlength.'" title="'.$field['Comment'].'">'. "\n";
 				}
 
 				print '	</td>'. "\n";

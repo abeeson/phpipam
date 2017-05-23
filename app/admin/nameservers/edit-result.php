@@ -15,13 +15,32 @@ $Result 	= new Result ();
 
 # verify that user is logged in
 $User->check_user_session();
+# check maintaneance mode
+$User->check_maintaneance_mode ();
+
+# strip input tags
+$_POST = $Admin->strip_input_tags($_POST);
 
 # validate csrf cookie
-$_POST['csrf_cookie']==$_SESSION['csrf_cookie'] ? :                      $Result->show("danger", _("Invalid CSRF cookie"), true);
+$User->csrf_cookie ("validate", "ns", $_POST['csrf_cookie']) === false ? $Result->show("danger", _("Invalid CSRF cookie"), true) : "";
 
 
 # Name and primary nameserver must be present!
 if ($_POST['action']!="delete") {
+
+	$m=1;
+	$nservers_reindexed = array ();
+	# reindex
+	foreach($_POST as $k=>$v) {
+		if(strpos($k, "namesrv-")!==false) {
+			$nservers_reindexed["namesrv-".$m] = $v;
+			$m++;
+			unset($_POST[$k]);
+		}
+	}
+	# join
+	$_POST = array_merge($_POST, $nservers_reindexed);
+
 	if($_POST['name'] == "") 				{ $Result->show("danger", _("Name is mandatory"), true); }
 	if(trim($_POST['namesrv-1']) == "") 	{ $Result->show("danger", _("Primary nameserver is mandatory"), true); }
 }

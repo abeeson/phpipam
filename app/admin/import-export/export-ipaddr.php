@@ -53,6 +53,7 @@ $custom_fields = $Tools->fetch_custom_fields('ipaddresses');
 $today = date("Ymd");
 $filename = $today."_phpipam_ip_address_export.xls";
 $workbook = new Spreadsheet_Excel_Writer();
+$workbook->setVersion(8);
 
 //formatting headers
 $format_header =& $workbook->addFormat();
@@ -67,6 +68,7 @@ $format_text =& $workbook->addFormat();
 // Create a worksheet
 $worksheet_name = "IP Addresses";
 $worksheet =& $workbook->addWorksheet($worksheet_name);
+$worksheet->setInputEncoding("utf-8");
 
 $lineCount = 0;
 $rowCount = 0;
@@ -88,6 +90,16 @@ if( (isset($_GET['description'])) && ($_GET['description'] == "on") ) {
 	$worksheet->write($lineCount, $rowCount, _('Description') ,$format_header);
 	$rowCount++;
 }
+if( (isset($_GET['vrf'])) && ($_GET['vrf'] == "on") ) {
+	$worksheet->write($lineCount, $rowCount, _('VRF') ,$format_header);
+	$rowCount++;
+	# fetch all VRFs
+	$all_vrfs = $Admin->fetch_all_objects("vrf", "vrfId");
+	if (!$all_vrfs) { $all_vrfs = array(); }
+	# prepare list for easy processing
+	$vrfs = array(); $vrfs[0] = "default";
+	foreach ($all_vrfs as $vrf) { $vrf = (array) $vrf; $vrfs[$vrf['vrfId']] = $vrf['name']; }
+}
 if( (isset($_GET['subnet'])) && ($_GET['subnet'] == "on") ) {
 	$worksheet->write($lineCount, $rowCount, _('Subnet') ,$format_header);
 	$rowCount++;
@@ -104,9 +116,12 @@ if( (isset($_GET['device'])) && ($_GET['device'] == "on") ) {
 	$worksheet->write($lineCount, $rowCount, _('Device') ,$format_header);
 	$rowCount++;
 	# get Devices and reorder
-	$devices = $Tools->fetch_devices ();
+	$devices = $Tools->fetch_all_objects ("devices", "hostname");
+	$devices_indexed = array();
+	if ($devices!==false) {
 	foreach($devices as $d) {
-		$devices_indexed[$d->id] = $d;
+    		$devices_indexed[$d->id] = $d;
+    	}
 	}
 }
 if( (isset($_GET['note'])) && ($_GET['note'] == "on") ) {
@@ -155,7 +170,7 @@ if($all_sections!==false) {
 			foreach ($section_subnets as $subnet) {
 
 				$subnet = (array) $subnet;
-				
+
 				// ignore folders
 				if($subnet['isFolder']) { continue; }
 
@@ -163,7 +178,7 @@ if($all_sections!==false) {
 				$ipaddresses = $Addresses->fetch_subnet_addresses ($subnet['id']);
 
 				if (sizeof($ipaddresses)==0) { continue; }
-				
+
 				foreach ($ipaddresses as $ip) {
 
 					//cast
@@ -174,7 +189,7 @@ if($all_sections!==false) {
 						$worksheet->write($lineCount, $rowCount, $section['name'], $format_text);
 						$rowCount++;
 					}
-					
+
 					if( (isset($_GET['ip_addr'])) && ($_GET['ip_addr'] == "on") ) {
 						$worksheet->write($lineCount, $rowCount, $Subnets->transform_to_dotted($ip['ip_addr']), $format_text);
 						$rowCount++;
@@ -187,6 +202,11 @@ if($all_sections!==false) {
 
 					if( (isset($_GET['description'])) && ($_GET['description'] == "on") ) {
 						$worksheet->write($lineCount, $rowCount, $ip['description'], $format_text);
+						$rowCount++;
+					}
+
+					if( (isset($_GET['vrf'])) && ($_GET['vrf'] == "on") ) {
+						$worksheet->write($lineCount, $rowCount, $vrfs[$subnet['vrfId']], $format_text);
 						$rowCount++;
 					}
 

@@ -90,7 +90,6 @@ if($User->user->authMethod == 1) {
 	<td class="info2"><?php print _('Select language'); ?></td>
 </tr>
 
-<?php if($User->user->role=="Administrator") { ?>
 <!-- weather to receive mails -->
 <tr>
 	<td><?php print _('Mail notifications'); ?></td>
@@ -100,7 +99,11 @@ if($User->user->authMethod == 1) {
 			<option value="Yes" <?php if($User->user->mailNotify=="Yes") { print "selected='selected'"; } ?>><?php print _("Yes"); ?></option>
 		</select>
 	</td>
-	<td class="info2"><?php print _('Select yes to receive notification change mail for state change'); ?></td>
+	<?php if($User->user->role=="Administrator") { ?>
+	<td class="info2"><?php print _('Select yes to receive mail notification changes (IP state change, new hosts, requests)'); ?></td>
+    <?php } else { ?>
+	<td class="info2"><?php print _('Select yes to receive mail notifications for IP requests'); ?></td>
+    <?php } ?>
 </tr>
 <!-- weather to receive mails for changelog -->
 <tr>
@@ -111,9 +114,13 @@ if($User->user->authMethod == 1) {
 			<option value="Yes" <?php if($User->user->mailChangelog=="Yes") { print "selected='selected'"; } ?>><?php print _("Yes"); ?></option>
 		</select>
 	</td>
+	<?php if($User->user->role=="Administrator") { ?>
 	<td class="info2"><?php print _('Select yes to receive notification change mail for changelog'); ?></td>
+    <?php } else { ?>
+	<td class="info2"><?php print _('Select yes to receive notification change mail for changelog'); ?></td>
+    <?php } ?>
 </tr>
-<?php } ?>
+
 
 
 <!-- display settings -->
@@ -147,32 +154,25 @@ if($User->user->authMethod == 1) {
 	</td>
 </tr>
 
-<!-- Output limit -->
+<!-- Menu type -->
 <tr>
-	<td class="title"><?php print _('IP address print limit'); ?></td>
+	<td class="title"><?php print _('Menu Type'); ?></td>
 	<td>
-		<select name="printLimit" class="form-control input-sm input-w-auto">
+		<select name="menuType" class="form-control input-sm input-w-auto">
 			<?php
 			$opts = array(
-				"0"=>_("Show all"),
-				"10"=>"10",
-				"30"=>"30",
-				"62"=>"62",
-				"100"=>"100",
-				"126"=>"126",
-				"254"=>"254"
+				"Static"=>_("Static"),
+				"Dynamic"=>_("Dynamic")
 			);
-
 			foreach($opts as $key=>$line) {
-				if($User->user->printLimit == $key) { print "<option value='$key' selected>$line</option>"; }
+				if($User->user->menuType == $key) { print "<option value='$key' selected>$line</option>"; }
 				else 								{ print "<option value='$key'>$line</option>"; }
 			}
-
 			?>
 		</select>
 	</td>
 	<td class="info2">
-		<?php print _('Number of IP addresses per page'); ?>
+		<?php print _('Select menu type to display'); ?>
 	</td>
 </tr>
 
@@ -201,7 +201,7 @@ if($User->user->authMethod == 1) {
 <span class="info2"><?php print _("Select widgets to be displayed on dashboard"); ?></span>
 
 
-<script type="text/javascript" src="js/1.2/jquery-ui-1.10.3.custom.min.js"></script>
+<script type="text/javascript" src="js/<?php print SCRIPT_PREFIX; ?>/jquery-ui-1.10.4.custom.min.js"></script>
 <script>
 $(document).ready(function() {
 	// initialize sortable

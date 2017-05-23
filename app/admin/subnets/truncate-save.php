@@ -16,20 +16,22 @@ $Result 	= new Result ();
 
 # verify that user is logged in
 $User->check_user_session();
+# check maintaneance mode
+$User->check_maintaneance_mode ();
 
 # validate csrf cookie
-$_POST['csrf_cookie']==$_SESSION['csrf_cookie'] ? :                      $Result->show("danger", _("Invalid CSRF cookie"), true);
+$User->csrf_cookie ("validate", "truncate", $_POST['csrf_cookie']) === false ? $Result->show("danger", _("Invalid CSRF cookie"), true) : "";
 
 
 # id must be numeric
-if(!is_numeric($_POST['subnetId']))			{ $Result->show("danger", _("Invalid ID"), true, true); }
+if(!is_numeric($_POST['subnetId']))			{ $Result->show("danger", _("Invalid ID"), true); }
 
 # get subnet details
 $subnet = $Subnets->fetch_subnet (null, $_POST['subnetId']);
 
 # verify that user has write permissions for subnet
 $subnetPerm = $Subnets->check_permission ($User->user, $subnet->id);
-if($subnetPerm < 3) 						{ $Result->show("danger", _('You do not have permissions to resize subnet').'!', true, true); }
+if($subnetPerm < 3) 						{ $Result->show("danger", _('You do not have permissions to resize subnet').'!', true); }
 
 # truncate network
 if(!$Subnets->subnet_truncate($subnet->id))	{ $Result->show("danger",  _("Failed to truncate subnet"), false); }
@@ -46,8 +48,10 @@ if ($User->settings->enablePowerDNS=="1" && $subnet->DNSrecursive=="1") {
 		$domain = $PowerDNS->fetch_domain_by_name ($zone);
 		// if it exist remove all PTR records
 		if ($domain!==false) {
+    		// get all PTRs
+    		$ptr_indexes = $Addresses->ptr_get_subnet_indexes ($subnet->id);
 			// remove existing records and links
-			$PowerDNS->remove_all_ptr_records ($domain->id);
+			$PowerDNS->remove_all_ptr_records ($domain->id, $ptr_indexes);
 			// ok
 			$Result->show("success", "PTR records removed", false);
 		}

@@ -25,25 +25,26 @@ print "<h4>"._('Available subnets')."</h4>";
 # check permission
 $permission = $Sections->check_permission ($User->user, $_GET['section']);
 
+
 # permitted
 if($permission != 0) {
 
 	# print  table structure
-	print "<table id='manageSubnets' class='table table-striped table-condensed table-top table-absolute'>";
+	print "<table id='manageSubnets' class='table sorted table-striped table-condensed table-top'>";
 
 		# set colcount
 		if($User->settings->enableVRF == 1)		{ $colCount = 10; }
 		else									{ $colCount = 9; }
 
-		# get Available subnets in section
-		$subnets = $Subnets->fetch_section_subnets($_GET['section']);
+		# get Available subnets in section - already provided in subnets_menu.php
+		//$section_subnets = $Subnets->fetch_section_subnets($_GET['section']);
 
 		# remove custom fields if all empty! */
 		foreach($custom as $field) {
 			$sizeMyFields[$field['name']] = 0;				// default value
 			# check against each IP address
-			foreach($subnets as $subn) {
-				if(strlen($subn->$field['name']) > 0) {
+			foreach($section_subnets as $subn) {
+				if(strlen($subn->{$field['name']}) > 0) {
 					$sizeMyFields[$field['name']]++;		// +1
 				}
 			}
@@ -57,8 +58,7 @@ if($permission != 0) {
 		}
 
 		# collapsed div with details
-		print "<tbody>";
-
+		print "<thead>";
 		# headers
 		print "<tr>";
 		print "	<th>"._('Subnet')."</th>";
@@ -69,7 +69,9 @@ if($permission != 0) {
 		}
 		print "	<th>"._('Master Subnet')."</th>";
 		print "	<th>"._('Device')."</th>";
-		print "	<th class='hidden-xs hidden-sm'>"._('Requests')."</th>";
+		if($User->settings->enableIPrequests == 1) {
+			print "	<th class='hidden-xs hidden-sm'>"._('Requests')."</th>";
+		}
 		if(sizeof($custom) > 0) {
 			foreach($custom as $field) {
 				if(!in_array($field['name'], $hidden_fields)) {
@@ -79,9 +81,13 @@ if($permission != 0) {
 		}
 		print "	<th class='actions' style='width:140px;white-space:nowrap;'></th>";
 		print "</tr>";
+		print "</thead>";
+
+        # body
+        print "<tbody>";
 
 		# add new link
-		if ($permission>2) {
+		if ($permission>1) {
 		print "<tr>";
 		print "	<td colspan='$colCount'>";
 		print "		<button class='btn btn-sm btn-default editSubnet' data-action='add' data-sectionid='$section[id]' data-subnetId='' rel='tooltip' data-placement='right' title='"._('Add new subnet to section')." $section[name]'><i class='fa fa-plus'></i> "._('Add subnet')."</button>";
@@ -90,7 +96,7 @@ if($permission != 0) {
 		}
 
 		# no subnets
-		if(sizeof($subnets) == 0) {
+		if(sizeof($section_subnets) == 0) {
 			print "<tr><td colspan='$colCount'><div class='alert alert-info'>"._('Section has no subnets')."!</div></td></tr>";
 
 			# check Available subnets for subsection
@@ -98,7 +104,7 @@ if($permission != 0) {
 		}
 		else {
 			// print subnets
-			if($Subnets->print_subnets_tools($User->user, $subnets, $custom)===false) {
+			if($Subnets->print_subnets_tools($User->user, $section_subnets, $custom, true, $section['showSupernetOnly'])===false) {
 				print "<tr>";
 				print "	<td colspan='$colspan'><div class='alert alert-info'>"._('No subnets available')."</div></td>";
 				print "</tr>";
@@ -106,6 +112,14 @@ if($permission != 0) {
 				print "<script type='text/javascript'>";
 				print "$(document).ready(function() { $('td#subnetsLeft').hide(); })";
 				print "</script>";
+			}
+			else {
+				// filtered
+				if($section['showSupernetOnly']==1) {
+				print "<tr>";
+				print "	<td colspan='$colspan'><div class='alert alert-info'><i class='fa fa-info'></i> "._('Only master subnets are shown')."</div></td>";
+				print "</tr>";
+				}
 			}
 		}
 
@@ -125,7 +139,7 @@ if($permission != 0) {
 					print "</tr>";
 
 					// print subnets
-					if($Subnets->print_subnets_tools($User->user, $slavesubnets, $custom)===false) {
+					if($Subnets->print_subnets_tools($User->user, $slavesubnets, $custom, true, $section['showSupernetOnly'])===false) {
 						print "<tr>";
 						print "	<td colspan='$colspan'><div class='alert alert-info'>"._('No subnets available')."</div></td>";
 						print "</tr>";

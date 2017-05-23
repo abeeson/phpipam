@@ -21,10 +21,11 @@ $User->check_user_session();
 
 # we dont need any errors!
 ini_set('display_errors', 1);
-error_reporting(E_ALL);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL ^ E_NOTICE ^ E_STRICT);
 
 # fetch subnet details
-$subnet = (array) $Subnets->fetch_subnet (null, $_GET['subnetId']);
+$subnet = (array) $Tools->fetch_object ("subnets", "id", $_GET['subnetId']);
 # fetch all IP addresses in subnet
 $addresses = $Addresses->fetch_subnet_addresses ($_GET['subnetId'], "ip_addr", "asc");
 # get all custom fields
@@ -32,7 +33,7 @@ $custom_fields = $Tools->fetch_custom_fields ('ipaddresses');
 
 
 # Create a workbook
-$filename = "phpipam_subnet_export.xls";
+$filename = isset($_GET['filename'])&&strlen(@$_GET['filename'])>0 ? $_GET['filename'] : "phpipam_subnet_export.xls";
 $workbook = new Spreadsheet_Excel_Writer();
 $workbook->setVersion(8);
 
@@ -134,6 +135,10 @@ if( (isset($_GET['note'])) && ($_GET['note'] == "on") ) {
 	$worksheet->write($lineCount, $rowCount, _('note') ,$format_title);
 	$rowCount++;
 }
+if( (isset($_GET['location'])) && ($_GET['location'] == "on") ) {
+	$worksheet->write($lineCount, $rowCount, _('location') ,$format_title);
+	$rowCount++;
+}
 
 //custom
 if(sizeof($custom_fields) > 0) {
@@ -155,8 +160,9 @@ $lineCount++;
 //we need to reformat state!
 $ip_types = $Addresses->addresses_types_fetch();
 //fetch devices and reorder
-$devices = $Tools->fetch_devices ();
-if (sizeof($devices)>0) {
+$devices = $Tools->fetch_all_objects("devices", "hostname");
+$devices_indexed = array();
+if ($devices!==false) {
 	foreach($devices as $d) {
 		$devices_indexed[$d->id] = (object) $d;
 	}
@@ -164,6 +170,18 @@ if (sizeof($devices)>0) {
 //add blank
 $devices_indexed[0] = new StdClass ();
 $devices_indexed[0]->hostname = 0;
+
+//fetch locations and reorder
+$locations = $Tools->fetch_all_objects("locations", "id");
+$locations_indexed = array();
+if ($locations!==false) {
+	foreach($locations as $d) {
+		$locations_indexed[$d->id] = (object) $d;
+	}
+}
+//add blank
+$locations_indexed[0] = new StdClass ();
+$locations_indexed[0]->name = 0;
 
 //write all IP addresses
 foreach ($addresses as $ip) {
@@ -173,7 +191,8 @@ foreach ($addresses as $ip) {
 	$rowCount = 0;
 
 	//change switch ID to name
-	$ip['switch'] = is_null($ip['switch'])||strlen($ip['switch'])==0||$ip['switch']==0||!isset($devices_indexed[$ip['switch']]) ? "" : $devices_indexed[$ip['switch']]->hostname;
+	$ip['switch']   = is_null($ip['switch'])||strlen($ip['switch'])==0||$ip['switch']==0||!isset($devices_indexed[$ip['switch']]) ? "" : $devices_indexed[$ip['switch']]->hostname;
+	$ip['location'] = is_null($ip['location'])||strlen($ip['location'])==0||$ip['location']==0||!isset($locations_indexed[$ip['location']]) ? "" : $locations_indexed[$ip['location']]->name;
 
 	if( (isset($_GET['ip_addr'])) && ($_GET['ip_addr'] == "on") ) {
 		$worksheet->write($lineCount, $rowCount, $Subnets->transform_address($ip['ip_addr'],"dotted"), $format_left);
@@ -215,6 +234,10 @@ foreach ($addresses as $ip) {
 	}
 	if( (isset($_GET['note'])) && ($_GET['note'] == "on") ) {
 		$worksheet->write($lineCount, $rowCount, $ip['note']);
+		$rowCount++;
+	}
+	if( (isset($_GET['location'])) && ($_GET['location'] == "on") ) {
+		$worksheet->write($lineCount, $rowCount, $ip['location']);
 		$rowCount++;
 	}
 

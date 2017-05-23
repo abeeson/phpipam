@@ -3,6 +3,33 @@
 /**
  * Display usermenu on top right
  */
+
+# filter ip value
+$_GET['ip'] = $Subnets->strip_input_tags(urldecode(trim($_GET['ip'])));
+
+# verify that user is logged in
+$User->check_user_session();
+
+// set parameters form cookie
+if (isset($_COOKIE['search_parameters'])) {
+    $params = json_decode($_COOKIE['search_parameters'], true);
+    if($params) {
+        foreach ($params as $k=>$p) {
+            if ($p=="on") {
+                $_REQUEST[$k] = $p;
+            }
+        }
+    }
+}
+
+# if all are off print all on!
+if(@$_REQUEST['subnets']!="on" && @$_REQUEST['addresses']!="on" && @$_REQUEST['vlans']!="on" && @$_REQUEST['vrf']!="on" && @$_REQUEST['pstn']!="on") {
+	$_REQUEST['subnets']="on";
+	$_REQUEST['addresses']="on";
+	$_REQUEST['vlans']="on";
+	$_REQUEST['vrf']="on";
+	$_REQUEST['pstn']="on";
+}
 ?>
 
 <div class="container-fluid">
@@ -16,26 +43,20 @@
 		</span>
 	</div>
 
-	<div id="searchSelect">
-		<?php
-		# if all are off print all on!
-		if(@$_REQUEST['subnets']!="on" && @$_REQUEST['addresses']!="on" && @$_REQUEST['vlans']!="on" && @$_REQUEST['vrf']!="on") {
-			$_REQUEST['subnets']="on";
-			$_REQUEST['addresses']="on";
-			$_REQUEST['vlans']="on";
-			$_REQUEST['vrf']="on";
-		}
-		?>
-		<input type="checkbox" name="subnets" 	value="on" <?php if($_REQUEST['subnets']=="on") 	{ print "checked='checked'"; } ?>> <?php print _('Subnets'); ?>
-		<input type="checkbox" name="addresses" value="on" <?php if($_REQUEST['addresses']=="on") 	{ print "checked='checked'"; } ?>> <?php print _('IP addresses'); ?>
-		<input type="checkbox" name="vlans" 	value="on" <?php if($_REQUEST['vlans']=="on") 		{ print "checked='checked'"; } ?>> <?php print _('VLANs'); ?>
+	<div id="searchSelect" style="text-align: left">
+		<input type="checkbox" name="subnets" 	value="on" <?php if($_REQUEST['subnets']=="on") 	{ print "checked='checked'"; } ?>> <?php print _('Subnets'); ?><br>
+		<input type="checkbox" name="addresses" value="on" <?php if($_REQUEST['addresses']=="on") 	{ print "checked='checked'"; } ?>> <?php print _('IP addresses'); ?><br>
+		<input type="checkbox" name="vlans" 	value="on" <?php if($_REQUEST['vlans']=="on") 		{ print "checked='checked'"; } ?>> <?php print _('VLANs'); ?><br>
 		<?php if($User->settings->enableVRF==1) { ?>
-		<input type="checkbox" name="vrf" 	    value="on" <?php if($_REQUEST['vrf']=="on") 		{ print "checked='checked'"; } ?>> <?php print _('VRFs'); ?>
+		<input type="checkbox" name="vrf" 	    value="on" <?php if($_REQUEST['vrf']=="on") 		{ print "checked='checked'"; } ?>> <?php print _('VRFs'); ?><br>
+		<?php } ?>
+		<?php if($User->settings->enablePSTN==1) { ?>
+		<input type="checkbox" name="pstn" 	    value="on" <?php if($_REQUEST['pstn']=="on") 		{ print "checked='checked'"; } ?>> <?php print _('PSTN'); ?><br>
 		<?php } ?>
 	</div>
 
 	<!-- settings -->
-	<?php if($User->authenticated) {
+	<?php
 	if($_SESSION['realipamusername']){
 	$realuser = $Tools->fetch_object("users", "username", $_SESSION['realipamusername']);
 	?>
@@ -53,7 +74,6 @@
 	<span class="info"><?php print _('Logged in as'); ?>  <?php print "&nbsp;"._($User->user->role); ?></span><br>
 
 	<!-- logout -->
-	<?php if(!isset($_SERVER['REMOTE_USER'])) { ?>
 	<a  href="<?php print create_link("login"); ?>"><?php print _('Logout'); ?>  <i class="fa fa-pad-left fa-sign-out"></i></a>
-	<?php }}} ?>
+	<?php } ?>
 </div>

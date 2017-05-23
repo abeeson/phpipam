@@ -1,10 +1,14 @@
 <?php
 
 /* @config file ------------------ */
-require( dirname(__FILE__) . '/../config.php' );
+require_once( dirname(__FILE__) . '/../config.php' );
+
+/* @http only cookies ------------------- */
+ini_set('session.cookie_httponly', 1);
 
 /* @debugging functions ------------------- */
 ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
 if (!$debugging) { error_reporting(E_ERROR ^ E_WARNING); }
 else			 { error_reporting(E_ALL ^ E_NOTICE ^ E_STRICT); }
 
@@ -39,19 +43,25 @@ require( dirname(__FILE__) . '/classes/class.PowerDNS.php' );	//Class for PowerD
 require( dirname(__FILE__) . '/classes/class.FirewallZones.php' );	//Class for firewall zone management
 require( dirname(__FILE__) . '/classes/class.Admin.php' );		//Class for Administration
 require( dirname(__FILE__) . '/classes/class.Mail.php' );		//Class for Mailing
+require( dirname(__FILE__) . '/classes/class.Rackspace.php' );	//Class for Racks
+require( dirname(__FILE__) . '/classes/class.SNMP.php' );	    //Class for SNMP queries
+require( dirname(__FILE__) . '/classes/class.DHCP.php' );	    //Class for DHCP
 
 # save settings to constant
-if($_GET['page']!="install" ) {
+if(@$_GET['page']!="install" ) {
 	# database object
 	$Database 	= new Database_PDO;
 	# try to fetch settings
 	try { $settings = $Database->getObject("settings", 1); }
 	catch (Exception $e) { $settings = false; }
 	if ($settings!==false) {
-		define(SETTINGS, json_encode($settings));
+		if (phpversion() < "5.4") {
+			define(SETTINGS, json_encode($settings));
+		}else{
+			define(SETTINGS, json_encode($settings, JSON_UNESCAPED_UNICODE));
+		}
 	}
 }
-
 
 /**
  * create links function
@@ -60,29 +70,36 @@ if($_GET['page']!="install" ) {
  *
  *	levels: $el
  */
-function create_link ($l0 = null, $l1 = null, $l2 = null, $l3 = null, $l4 = null, $l5 = null ) {
+function create_link ($l0 = null, $l1 = null, $l2 = null, $l3 = null, $l4 = null, $l5 = null, $l6 = null ) {
 	# get settings
 	global $User;
 
 	# set normal link array
-	$el = array("page", "section", "subnetId", "sPage", "ipaddrid");
+	$el = array("page", "section", "subnetId", "sPage", "ipaddrid", "tab");
 	// override for search
 	if ($l0=="tools" && $l1=="search")
-    $el = array("page", "section", "addresses", "subnets", "vlans", "ip");
+    $el = array("page", "section", "ip", "addresses", "subnets", "vlans", "ip");
 
 	# set rewrite
 	if($User->settings->prettyLinks=="Yes") {
-		if(!is_null($l5))		{ $link = "$l0/$l1/$l2/$l3/$l4/$l5"; }
+		if(!is_null($l6))		{ $link = "$l0/$l1/$l2/$l3/$l4/$l5/$l6"; }
+		elseif(!is_null($l5))	{ $link = "$l0/$l1/$l2/$l3/$l4/$l5/"; }
 		elseif(!is_null($l4))	{ $link = "$l0/$l1/$l2/$l3/$l4/"; }
 		elseif(!is_null($l3))	{ $link = "$l0/$l1/$l2/$l3/"; }
 		elseif(!is_null($l2))	{ $link = "$l0/$l1/$l2/"; }
 		elseif(!is_null($l1))	{ $link = "$l0/$l1/"; }
 		elseif(!is_null($l0))	{ $link = "$l0/"; }
 		else					{ $link = ""; }
+
+		# IP search fix
+		if ($l0=="tools" && $l1=="search" && isset($l2) && substr($link,-1)=="/") {
+    		$link = substr($link, 0, -1);
+		}
 	}
 	# normal
 	else {
-		if(!is_null($l5))		{ $link = "?$el[0]=$l0&$el[1]=$l1&$el[2]=$l2&$el[3]=$l3&$el[4]=$l4&$el[5]=$l5"; }
+		if(!is_null($l6))		{ $link = "?$el[0]=$l0&$el[1]=$l1&$el[2]=$l2&$el[3]=$l3&$el[4]=$l4&$el[5]=$l5&$el[6]=$l6"; }
+		elseif(!is_null($l5))	{ $link = "?$el[0]=$l0&$el[1]=$l1&$el[2]=$l2&$el[3]=$l3&$el[4]=$l4&$el[5]=$l5"; }
 		elseif(!is_null($l4))	{ $link = "?$el[0]=$l0&$el[1]=$l1&$el[2]=$l2&$el[3]=$l3&$el[4]=$l4"; }
 		elseif(!is_null($l3))	{ $link = "?$el[0]=$l0&$el[1]=$l1&$el[2]=$l2&$el[3]=$l3"; }
 		elseif(!is_null($l2))	{ $link = "?$el[0]=$l0&$el[1]=$l1&$el[2]=$l2"; }

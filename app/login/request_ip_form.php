@@ -14,7 +14,7 @@
 $subnets = $Tools->requests_fetch_available_subnets ();
 
 # die if no subnets are available for requests!
-if($subnets===false) { ?>
+if($subnets===NULL) { ?>
 <tr>
 	<td colspan="2"><div class="alert alert-warning" style="white-space:nowrap;"><?php print _('No subnets available for requests'); ?></div></td>
 </tr>
@@ -143,3 +143,28 @@ if(in_array('owner', $setFields)) {
 
 </form>
 </div>
+
+
+
+<?php
+# check for requests guide
+$instructions = $Database->getObject("instructions", 2);
+
+if(is_object($instructions)) {
+    if(strlen($instructions->instructions)>0) {
+
+        /* format line breaks */
+        $instructions->instructions = stripslashes($instructions->instructions);		//show html
+
+        /* prevent <script> */
+        $instructions->instructions = str_replace("<script", "<div class='error'><xmp><script", $instructions->instructions);
+        $instructions->instructions = str_replace("</script>", "</script></xmp></div>", $instructions->instructions);
+
+        print "<div id='login' class='request'>";
+        print "<div class='requestIP'>";
+        print $instructions->instructions;
+        print "</div>";
+        print "</div>";
+    }
+}
+?>

@@ -20,7 +20,13 @@ $Result 	= new Result ();
 $User->check_user_session();
 
 # create csrf token
-$csrf = $User->create_csrf_cookie ();
+$csrf = $_POST['action']=="add" ? $User->csrf_cookie ("create", "folder_add") : $User->csrf_cookie ("create", "folder_".$_POST['subnetId']);
+
+# strip tags - XSS
+$_POST = $User->strip_input_tags ($_POST);
+
+# validate action
+$Admin->validate_action ($_POST['action'], true);
 
 # ID must be numeric
 if($_POST['action']!="add") {
@@ -169,8 +175,8 @@ $readonly = $_POST['action']=="edit" || $_POST['action']=="delete" ? true : fals
 				elseif($field['type'] == "date" || $field['type'] == "datetime") {
 					// just for first
 					if($timeP==0) {
-						print '<link rel="stylesheet" type="text/css" href="css/1.2/bootstrap/bootstrap-datetimepicker.min.css">';
-						print '<script type="text/javascript" src="js/1.2/bootstrap-datetimepicker.min.js"></script>';
+						print '<link rel="stylesheet" type="text/css" href="css/=/bootstrap/boot'.SCRIPT_PREFIX.'strap-datetimepicker.min.css">';
+						print '<script type="text/javascript" src="js/'.SCRIPT_PREFIX.'/bootstrap-datetimepicker.min.js"></script>';
 						print '<script type="text/javascript">';
 						print '$(document).ready(function() {';
 						//date only

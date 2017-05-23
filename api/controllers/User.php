@@ -8,20 +8,96 @@
 
 class User_controller extends Common_api_functions {
 
-	/* vars */
-	public $token;					// users token
-	public $token_expires;			// time when token expires
-	private $token_valid_time;		// for how many seconds token is valid
-	private $token_length;			// number of chars for token
-	private $max_failures;			// max number of failures before IP is blocked
-	private $block_ip = true;		// controls if IP should be blocked for 5 minutes on invalid requests
 
-	/* object holders */
-	protected $Database;			// Database object
-	protected $Tools;				// Tools object
-	protected $Admin;				// Admin object
-	protected $User;				// User object
-	protected $params;				// requested parameters
+	/**
+	 * users token
+	 *
+	 * @var mixed
+	 * @access public
+	 */
+	public $token;
+
+	/**
+	 * time when token expires
+	 *
+	 * @var mixed
+	 * @access public
+	 */
+	public $token_expires;
+
+	/**
+	 * for how many seconds token is valid
+	 *
+	 * @var mixed
+	 * @access private
+	 */
+	private $token_valid_time;
+
+	/**
+	 * number of chars for token
+	 *
+	 * @var mixed
+	 * @access private
+	 */
+	private $token_length;
+
+	/**
+	 * max number of failures before IP is blocked
+	 *
+	 * @var mixed
+	 * @access private
+	 */
+	private $max_failures;
+
+	/**
+	 * controls if IP should be blocked for 5 minutes on invalid requests
+	 *
+	 * (default value: true)
+	 *
+	 * @var bool
+	 * @access private
+	 */
+	private $block_ip = true;
+
+	/**
+	 * Database object
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
+	protected $Database;
+
+	/**
+	 * Master Tools object
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
+	protected $Tools;
+
+	/**
+	 * Master Admin object
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
+	protected $Admin;
+
+	/**
+	 * Master User object
+	 *
+	 * @var mixed
+	 * @access protected
+	 */
+	protected $User;
+
+	/**
+	 * requested parameters
+	 *
+	 * @var mixed
+	 * @access public
+	 */
+	public $_params;
 
 
 
@@ -30,6 +106,8 @@ class User_controller extends Common_api_functions {
 	 *
 	 * @access public
 	 * @param mixed $Database
+	 * @param mixed $Tools
+	 * @param mixed $params
 	 * @param mixed $Response
 	 */
 	public function __construct ($Database, $Tools=null, $params=null, $Response) {
@@ -68,6 +146,7 @@ class User_controller extends Common_api_functions {
 		$this->validate_options_request ();
 
 		// methods
+		$result = array();
 		$result['methods'] = array(
 								array("href"=>"/api/".$this->_params->app_id."/user/", 	"methods"=>array(array("rel"=>"read", 	"method"=>"GET"),
 																										 array("rel"=>"create", "method"=>"POST"),
@@ -88,16 +167,46 @@ class User_controller extends Common_api_functions {
 	/**
 	 * Authenticates user and returns token
 	 *
-	 * @access public
-	 * @return void
+	 *	Identifier can be:
+	 *		- /token_expires/				// returns token expiration date
+	 *		- /expires/						// returns token expiration date
+	 *		- /all/							// returns all phpipam users
+	 *		- /admins/						// returns ipam admins
 	 */
 	public function GET () {
-		// block IP
-		$this->validate_block ();
-		// validate token
-		$this->validate_requested_token ();
-		// ok
-		return array("code"=>200, "data"=>array("expires"=>$this->token_expires));
+		// token_expires
+		if ($this->_params->id=="token_expires" || $this->_params->id=="expires" || !isset($this->_params->id) || $this->_params->id=="all" || $this->_params->id=="admins") {
+			// block IP
+			$this->validate_block ();
+			// validate token
+			$this->validate_requested_token ();
+			// users fetch
+			if ($this->_params->id=="admins" || $this->_params->id=="all") {
+				// fetch details
+				$app_details = $this->fetch_app_details ();
+				// permissions check - RWA required
+				if ($app_details->app_permissions != 3) {
+					$this->Response->throw_exception(503, 'Invalid app permissions');
+				}
+				// ok
+				else {
+					// admins or all
+					if ($this->_params->id=="admins") {
+						return array("code"=>200, "data"=>$this->User->fetch_multiple_objects ("users", "role", "Administrator", "id", true, false, "*"));
+					}
+					else {
+						return array("code"=>200, "data"=>$this->User->fetch_all_objects ("users", "id", true));
+					}
+				}
+			}
+			else {
+				return array("code"=>200, "data"=>array("expires"=>$this->token_expires));
+			}
+		}
+		// return success for backwards compatibility
+		else {
+			$this->Response->throw_exception(404, 'Invalid identifier');
+		}
 	}
 
 
@@ -219,8 +328,12 @@ class User_controller extends Common_api_functions {
 	 * @return void
 	 */
 	private function authenticate () {
+		# if no user/pass are provided die with error
+		if(!isset($_SERVER['PHP_AUTH_USER']) || !isset($_SERVER['PHP_AUTH_PW'])) {
+			$this->Response->throw_exception(400, "Please provide username and password");
+		}
 		# try to authenticate user, it it fails it will fail by itself
-		$this->User-> authenticate ($_SERVER['PHP_AUTH_USER'], $_SERVER['PHP_AUTH_PW']);
+		$this->User->authenticate ($_SERVER['PHP_AUTH_USER'], $_SERVER['PHP_AUTH_PW']);
 
 		# if token is valid and set extend it, otherwise generate new
 		if ($this->validate_user_token ()) {
@@ -237,6 +350,17 @@ class User_controller extends Common_api_functions {
 	    # result
 	    return array("code"=>200, "data"=>array("token"=>$this->token, "expires"=>$this->token_expires));
 	}
+
+	/**
+	 * Returns app details for validations
+	 *
+	 * @method fetch_app_details
+	 * @return object]            app details
+	 */
+	private function fetch_app_details () {
+		return $this->User->fetch_object ("api", "app_id", $_GET['app_id']);
+	}
+
 
 
 
@@ -259,8 +383,8 @@ class User_controller extends Common_api_functions {
 	 */
 	public function set_token_valid_time ($token_valid_time = null) {
 		// validate integer
-		if ($length!=null) {
-			if (!is_numeric($length))				{ $this->Response->throw_exception(500, "token valid time must be an integer"); }
+		if ($this->token_length!=null) {
+			if (!is_numeric($this->token_length))	{ $this->Response->throw_exception(500, "token valid time must be an integer"); }
 		}
 		// save
 		$this->token_valid_time = is_null($token_valid_time) ? 21600 : $token_valid_time;
@@ -275,17 +399,24 @@ class User_controller extends Common_api_functions {
 	 */
 	public function set_max_failures ($failures=null) {
 		// validate integer
-		if ($length!=null) {
-			if (!is_numeric($length))				{ $this->Response->throw_exception(500, "Max failures must be an integer"); }
+		if ($this->token_length!=null) {
+			if (!is_numeric($this->token_length))	{ $this->Response->throw_exception(500, "Max failures must be an integer"); }
 		}
 		// save
 		$this->max_failures = $failures==null ? 10 : $failures;
 	}
 
+	/**
+	 * Block IP address.
+	 *
+	 * @access public
+	 * @param bool $block (default: true)
+	 * @return void
+	 */
 	public function block_ip ($block = true) {
 		// validate integer
 		if (!is_bool($block)) {
-			if (!is_numeric($length))				{ $this->Response->throw_exception(500, "Max failures must be an integer"); }
+			if (!is_numeric($this->token_length))	{ $this->Response->throw_exception(500, "Max failures must be an integer"); }
 		}
 		// save
 		$this->block_ip = $$block;
@@ -406,8 +537,6 @@ class User_controller extends Common_api_functions {
 		}
 	}
 
-
-
 	/**
 	 * Checks if token has expired
 	 *
@@ -427,6 +556,17 @@ class User_controller extends Common_api_functions {
 	private function refresh_token_expiration () {
 		# reset values
 		$this->token = $this->User->user->token;
+
+		// convert existing expiry date string to a timestamp
+		$expire_time = strtotime($this->token_expires);
+
+		// Write Throttling from token updates
+		// In order to keep the DB writes from token updates to a minimum, only update the expire time
+		// if the expire time was set more than 60 seconds ago.
+		if ( ((time()+$this->token_valid_time) - $expire_time) < 60) {
+				return;
+		}
+
 		$this->token_expires = date("Y-m-d H:i:s", time()+$this->token_valid_time);
 		# set token values
 		$values = array(

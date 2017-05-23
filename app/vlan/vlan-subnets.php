@@ -13,7 +13,7 @@ $slaves = $Subnets->fetch_vlan_subnets ($_GET['subnetId'], $_GET['section']);
 # no subnets
 if(!$slaves) {
 	print "<hr>";
-	print "<h4>"._('VLAN')." $vlan->number (".$vlan->name.") "._('has no belonging subnets')."</h4>";
+	print "<h4>"._('VLAN')." $vlan[number] (".$vlan[name].") "._('has no belonging subnets')."</h4>";
 }
 else {
 	# cast
@@ -51,7 +51,7 @@ else {
 
 			print "<tr>";
 		    print "	<td class='small description'><a href='".create_link("subnets",$_GET['section'],$subnet['id'])."'>$subnet[description]</a></td>";
-		    print "	<td><a href='".create_link("subnets",$_GET['section'],$subnet['id'])."'>$subnet[ip]/$subnet[mask] $fullinfo</a></td>";
+		    print "	<td><a href='".create_link("subnets",$_GET['section'],$subnet['id'])."'>".$Subnets->transform_address($subnet['subnet'], "dotted")."/$subnet[mask] $fullinfo</a></td>";
 
 			# host check
 			if($subnet['pingSubnet'] == 1) 				{ print '<td class="allowRequests small hidden-xs hidden-sm">'._('enabled').'</td>'; }
@@ -64,18 +64,20 @@ else {
 				# fix for subnet and broadcast free space calculation
 				$ipCount = 0;															//initial count
 				$Subnets->reset_subnet_slaves_recursive ();
-				$slaves2 = $Subnets->fetch_subnet_slaves_recursive ($subnet['id']);		//fetch all slaves
-				foreach($Subnets->slaves as $s) {
-					$ipCount = $ipCount + $Addresses->count_subnet_addresses ($s['id']);
-					# subnet and broadcast add used
-					if($Subnets->get_ip_version ($s['subnet'])=="IPv4" && $s['mask']<31) {
-						$ipCount = $ipCount+2;
+				$Subnets->fetch_subnet_slaves_recursive ($subnet['id']);		//fetch all slaves
+				if(is_array($Subnets->slaves)) {
+					foreach($Subnets->slaves as $s) {
+						$ipCount = $ipCount + $Addresses->count_subnet_addresses ($s);
+						# subnet and broadcast add used
+						if($Subnets->get_ip_version ($subnet['subnet'])=="IPv4" && $subnet['mask']<31) {
+							$ipCount = $ipCount+2;
+						}
 					}
 				}
 			}
 
 			# print usage
-			$calculate = $Subnets->calculate_subnet_usage ( (int) $ipCount, $subnet['mask'], $subnet['subnet'], $subnet['isFull'] );
+			$calculate = $Subnets->calculate_subnet_usage ($subnet);
 		    print ' <td class="small hidden-xs hidden-sm">'. $calculate['used'] .'/'. $calculate['maxhosts'] .'</td>'. "\n";
 		    print '	<td class="small hidden-xs hidden-sm">'. $calculate['freehosts_percent'] .'</td>';
 
